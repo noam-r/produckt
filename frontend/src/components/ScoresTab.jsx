@@ -20,6 +20,7 @@ import {
   TrendingUp,
   CheckCircle,
   Refresh,
+  Download,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { initiativesApi } from '../api/initiatives';
@@ -43,6 +44,7 @@ const getFdvScoreLevel = (score) => {
 
 export default function ScoresTab({ initiativeId }) {
   const [calculating, setCalculating] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // Fetch scores
   const {
@@ -67,6 +69,27 @@ export default function ScoresTab({ initiativeId }) {
       // Error handling in mutation
     } finally {
       setCalculating(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      const response = await initiativesApi.exportScoresPdf(initiativeId);
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `scorecard-${initiativeId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('PDF export error:', err);
+      alert('Failed to export scorecard as PDF');
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -123,13 +146,23 @@ export default function ScoresTab({ initiativeId }) {
         <Typography variant="h5" fontWeight="600">
           Initiative Scoring
         </Typography>
-        <Button
-          startIcon={<Refresh />}
-          onClick={handleCalculateScores}
-          disabled={calculating}
-        >
-          Recalculate
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            startIcon={exportingPdf ? <CircularProgress size={20} /> : <Download />}
+            onClick={handleExportPdf}
+            disabled={exportingPdf}
+            variant="outlined"
+          >
+            Export PDF
+          </Button>
+          <Button
+            startIcon={<Refresh />}
+            onClick={handleCalculateScores}
+            disabled={calculating}
+          >
+            Recalculate
+          </Button>
+        </Box>
       </Box>
 
       {/* Score Summary */}
@@ -239,14 +272,53 @@ export default function ScoresTab({ initiativeId }) {
 
           <Divider sx={{ my: 3 }} />
 
-          {scores.rice_rationale && (
+          {scores.rice_reasoning && (
             <Box>
               <Typography variant="subtitle2" fontWeight="600" gutterBottom>
-                Rationale
+                Scoring Rationale
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {scores.rice_rationale}
-              </Typography>
+              <Box sx={{ mt: 2 }}>
+                {scores.rice_reasoning.reach && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" fontWeight="600" color="primary.main" gutterBottom>
+                      Reach
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                      {scores.rice_reasoning.reach}
+                    </Typography>
+                  </Box>
+                )}
+                {scores.rice_reasoning.impact && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" fontWeight="600" color="primary.main" gutterBottom>
+                      Impact
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                      {scores.rice_reasoning.impact}
+                    </Typography>
+                  </Box>
+                )}
+                {scores.rice_reasoning.confidence && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" fontWeight="600" color="primary.main" gutterBottom>
+                      Confidence
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                      {scores.rice_reasoning.confidence}
+                    </Typography>
+                  </Box>
+                )}
+                {scores.rice_reasoning.effort && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" fontWeight="600" color="primary.main" gutterBottom>
+                      Effort
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                      {scores.rice_reasoning.effort}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
             </Box>
           )}
         </CardContent>
@@ -330,14 +402,43 @@ export default function ScoresTab({ initiativeId }) {
 
           <Divider sx={{ my: 3 }} />
 
-          {scores.fdv_rationale && (
+          {scores.fdv_reasoning && (
             <Box>
               <Typography variant="subtitle2" fontWeight="600" gutterBottom>
-                Rationale
+                Scoring Rationale
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {scores.fdv_rationale}
-              </Typography>
+              <Box sx={{ mt: 2 }}>
+                {scores.fdv_reasoning.feasibility && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" fontWeight="600" color="primary.main" gutterBottom>
+                      Feasibility
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                      {scores.fdv_reasoning.feasibility}
+                    </Typography>
+                  </Box>
+                )}
+                {scores.fdv_reasoning.desirability && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" fontWeight="600" color="secondary.main" gutterBottom>
+                      Desirability
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                      {scores.fdv_reasoning.desirability}
+                    </Typography>
+                  </Box>
+                )}
+                {scores.fdv_reasoning.viability && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" fontWeight="600" color="success.main" gutterBottom>
+                      Viability
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                      {scores.fdv_reasoning.viability}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
             </Box>
           )}
         </CardContent>

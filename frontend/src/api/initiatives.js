@@ -93,6 +93,14 @@ export const initiativesApi = {
     return data;
   },
 
+  // Export scores as PDF
+  exportScoresPdf: async (id) => {
+    const { data } = await apiClient.get(`/api/agents/initiatives/${id}/scores/pdf`, {
+      responseType: 'blob',
+    });
+    return data;
+  },
+
   // Get evaluation
   getEvaluation: async (id) => {
     const { data } = await apiClient.get(`/api/agents/initiatives/${id}/evaluate-readiness`);

@@ -803,6 +803,89 @@ def get_scores(
     return score
 
 
+@router.get("/initiatives/{initiative_id}/scores/pdf")
+def export_scores_pdf(
+    initiative_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Export the scorecard as a PDF file.
+
+    Returns a properly formatted PDF with RICE and FDV scores and reasoning.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Get initiative
+        initiative_repo = InitiativeRepository(db)
+        initiative = initiative_repo.get_by_id(initiative_id, current_user.organization_id)
+
+        if not initiative:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Initiative not found"
+            )
+
+        # Get scores
+        score_repo = ScoreRepository(db)
+        score = score_repo.get_by_initiative(initiative_id)
+
+        if not score:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Scores not found for this initiative. Calculate them first."
+            )
+
+        # Import PDF generator
+        from backend.services.pdf_generator import scorecard_to_pdf
+
+        # Prepare data
+        rice_data = {
+            'reach': score.reach,
+            'impact': score.impact,
+            'confidence': score.confidence,
+            'effort': score.effort
+        }
+
+        fdv_data = {
+            'feasibility': score.feasibility,
+            'desirability': score.desirability,
+            'viability': score.viability
+        }
+
+        # Generate PDF
+        pdf_bytes = scorecard_to_pdf(
+            initiative_title=initiative.title,
+            rice_score=score.rice_score,
+            rice_data=rice_data,
+            rice_reasoning=score.rice_reasoning or {},
+            fdv_score=score.fdv_score,
+            fdv_data=fdv_data,
+            fdv_reasoning=score.fdv_reasoning or {}
+        )
+
+        logger.info(f"Scorecard PDF generated successfully, {len(pdf_bytes)} bytes")
+
+        # Return PDF with proper headers
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="scorecard-{initiative_id}.pdf"'
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating scorecard PDF: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate scorecard PDF: {str(e)}"
+        )
+
+
 @router.delete("/initiatives/{initiative_id}/scores", status_code=status.HTTP_204_NO_CONTENT)
 def delete_scores(
     initiative_id: UUID,

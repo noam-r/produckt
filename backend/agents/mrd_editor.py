@@ -116,10 +116,6 @@ MRD_EDITOR_USER_TEMPLATE = """Please edit these MRD sections into a cohesive, co
 
 ---
 
-*Generated with ProDuckt, your friendly Product Product*
-
----
-
 # Editorial Task
 
 Please edit this MRD to:
