@@ -167,6 +167,5 @@ For commercial licensing inquiries, contact: produckt.team@pm.me
 
 ## Support
 
-- Issues: [GitHub Issues](https://github.com/yourusername/produck/issues)
-- Documentation: [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)
-- API Docs: http://localhost:8000/docs (when running locally)
+- Issues: [GitHub Issues](https://github.com/noam-r/produckt/issues)
+
