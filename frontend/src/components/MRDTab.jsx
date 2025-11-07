@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Box,
   Card,
@@ -23,6 +23,7 @@ import {
   Refresh,
   Info,
   ArrowDropDown,
+  Edit,
 } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -30,6 +31,7 @@ import { useQuery } from '@tanstack/react-query';
 import { initiativesApi } from '../api/initiatives';
 import { useJobPolling } from '../hooks/useJobPolling';
 import JobProgressModal from './JobProgressModal';
+import FineTuneModal from './FineTuneModal';
 import apiClient from '../api/client';
 
 export default function MRDTab({ initiativeId }) {
@@ -37,6 +39,8 @@ export default function MRDTab({ initiativeId }) {
   const [error, setError] = useState(null);
   const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [fineTuneModal, setFineTuneModal] = useState({ open: false, section: null });
+  const [isFineTuning, setIsFineTuning] = useState(false);
 
   // Fetch MRD
   const {
@@ -122,6 +126,86 @@ export default function MRDTab({ initiativeId }) {
       alert('Failed to export MRD as PDF');
     } finally {
       setIsExportingPdf(false);
+    }
+  };
+
+  // Parse MRD content into sections
+  const parsedSections = useMemo(() => {
+    if (!mrd?.content) return [];
+
+    const content = mrd.content;
+    const sections = [];
+
+    // Split by ## headers (h2 level - main sections)
+    const sectionRegex = /^## (.+)$/gm;
+    let match;
+    const matches = [];
+
+    while ((match = sectionRegex.exec(content)) !== null) {
+      matches.push({
+        name: match[1].trim(),
+        index: match.index,
+        fullMatch: match[0]
+      });
+    }
+
+    // Extract content for each section
+    for (let i = 0; i < matches.length; i++) {
+      const currentMatch = matches[i];
+      const nextMatch = matches[i + 1];
+
+      const start = currentMatch.index + currentMatch.fullMatch.length;
+      const end = nextMatch ? nextMatch.index : content.length;
+
+      const sectionContent = content.substring(start, end).trim();
+
+      sections.push({
+        name: currentMatch.name,
+        content: sectionContent,
+        fullContent: content.substring(currentMatch.index, end).trim()
+      });
+    }
+
+    return sections;
+  }, [mrd?.content]);
+
+  const handleOpenFineTune = (section) => {
+    setFineTuneModal({
+      open: true,
+      section: section
+    });
+  };
+
+  const handleCloseFineTune = () => {
+    setFineTuneModal({ open: false, section: null });
+  };
+
+  const handleFineTune = async (instructions) => {
+    if (!fineTuneModal.section) return;
+
+    setIsFineTuning(true);
+    setError(null);
+
+    try {
+      const response = await apiClient.post(
+        `/api/agents/initiatives/${initiativeId}/mrd/fine-tune-section`,
+        {
+          section_name: fineTuneModal.section.name,
+          section_content: fineTuneModal.section.content,
+          user_instructions: instructions
+        }
+      );
+
+      // Refetch the MRD to get updated content
+      await refetch();
+
+      // Close modal
+      handleCloseFineTune();
+    } catch (err) {
+      console.error('Fine-tuning error:', err);
+      setError(err.response?.data?.detail || 'Failed to fine-tune section. Please try again.');
+    } finally {
+      setIsFineTuning(false);
     }
   };
 
@@ -413,18 +497,60 @@ export default function MRDTab({ initiativeId }) {
               },
             }}
           >
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                table: ({node, ...props}) => (
-                  <div className="table-wrapper">
-                    <table {...props} />
-                  </div>
-                ),
-              }}
-            >
-              {mrd.content}
-            </ReactMarkdown>
+            {parsedSections.length > 0 ? (
+              // Render sections with fine-tune buttons
+              parsedSections.map((section, index) => (
+                <Box key={index} sx={{ mb: 4 }}>
+                  {/* Section Header with Fine-Tune Button */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                    <Typography variant="h5" component="h2" fontWeight="600" color="text.primary">
+                      {section.name}
+                    </Typography>
+                    <Tooltip title="Fine-tune this section with AI">
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => handleOpenFineTune(section)}
+                        disabled={isFineTuning}
+                        sx={{ ml: 2 }}
+                      >
+                        <Edit fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+
+                  {/* Section Content */}
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      table: ({node, ...props}) => (
+                        <div className="table-wrapper">
+                          <table {...props} />
+                        </div>
+                      ),
+                    }}
+                  >
+                    {section.content}
+                  </ReactMarkdown>
+
+                  {index < parsedSections.length - 1 && <Divider sx={{ mt: 3 }} />}
+                </Box>
+              ))
+            ) : (
+              // Fallback to regular markdown rendering if parsing fails
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  table: ({node, ...props}) => (
+                    <div className="table-wrapper">
+                      <table {...props} />
+                    </div>
+                  ),
+                }}
+              >
+                {mrd.content}
+              </ReactMarkdown>
+            )}
           </Paper>
         </CardContent>
       </Card>
@@ -443,6 +569,16 @@ export default function MRDTab({ initiativeId }) {
         title="Exporting PDF"
         progressMessage="Rendering content and generating PDF..."
         progressPercent={null}
+      />
+
+      {/* Fine-tune section modal */}
+      <FineTuneModal
+        open={fineTuneModal.open}
+        onClose={handleCloseFineTune}
+        sectionName={fineTuneModal.section?.name || ''}
+        sectionContent={fineTuneModal.section?.content || ''}
+        onFineTune={handleFineTune}
+        isProcessing={isFineTuning}
       />
     </Box>
   );

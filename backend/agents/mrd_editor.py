@@ -116,7 +116,7 @@ MRD_EDITOR_USER_TEMPLATE = """Please edit these MRD sections into a cohesive, co
 
 ---
 
-*Generated with the help of ProDuckt, your friendly Product product*
+*Generated with ProDuckt, your friendly Product Product*
 
 ---
 
@@ -238,3 +238,89 @@ class MRDEditorAgent(BaseAgent):
         )
 
         return edited_content, word_count
+
+    def fine_tune_section(
+        self,
+        initiative: Initiative,
+        section_name: str,
+        section_content: str,
+        user_instructions: str,
+        user_id: UUID
+    ) -> str:
+        """
+        Fine-tune a specific MRD section based on user instructions.
+
+        Args:
+            initiative: Initiative this MRD section belongs to
+            section_name: Name of the section being edited (e.g., "Executive Summary")
+            section_content: Current content of the section
+            user_instructions: User's instructions for how to improve the section
+            user_id: User requesting the fine-tuning
+
+        Returns:
+            Improved section content in markdown format
+
+        Raises:
+            ValueError: If section_content or user_instructions are empty
+        """
+        if not section_content.strip():
+            raise ValueError("Section content cannot be empty")
+        if not user_instructions.strip():
+            raise ValueError("User instructions cannot be empty")
+
+        system_prompt = """You are a professional editor specializing in product requirements documents.
+
+Your role is to fine-tune a specific section of an MRD based on user feedback and instructions.
+
+# Editorial Objectives
+1. **Follow User Instructions**: Carefully implement the user's requested changes
+2. **Maintain Professional Quality**: Keep executive-ready tone and clarity
+3. **Preserve Structure**: Keep the markdown formatting and section structure
+4. **Keep Critical Information**: Don't remove important facts, metrics, or requirements unless instructed
+5. **Be Precise**: Make targeted improvements rather than wholesale rewrites
+
+# Output Requirements
+- Return ONLY the improved section content in markdown format
+- Do NOT include the section header (e.g., "## Executive Summary") - just the content
+- Maintain the same level of detail unless instructed otherwise
+- Keep all markdown formatting (bullets, bold, tables, etc.)"""
+
+        user_message = f"""Please improve this MRD section based on the user's instructions.
+
+**Initiative**: {initiative.title}
+
+**Section**: {section_name}
+
+**Current Content**:
+{section_content}
+
+**User Instructions**:
+{user_instructions}
+
+---
+
+Please provide the improved section content following the user's instructions. Return ONLY the section content without the header."""
+
+        # Call LLM with appropriate token limit
+        improved_content, llm_call, stop_reason = self.call_llm(
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}],
+            organization_id=initiative.organization_id,
+            user_id=user_id,
+            initiative_id=initiative.id,
+            max_tokens=4000,  # Sufficient for most section improvements
+            temperature=0.7   # Balanced creativity for improvements
+        )
+
+        if stop_reason == "max_tokens":
+            logger.warning(
+                f"Section fine-tuning output was truncated at max_tokens limit. "
+                f"Section: {section_name}, Initiative: {initiative.id}"
+            )
+
+        logger.info(
+            f"Section fine-tuning complete for '{section_name}' in initiative {initiative.id}. "
+            f"Stop reason: {stop_reason}"
+        )
+
+        return improved_content.strip()
