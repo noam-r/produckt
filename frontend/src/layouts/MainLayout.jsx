@@ -31,6 +31,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import Logo from '../components/Logo';
 
 const drawerWidth = 260;
 
@@ -78,9 +79,11 @@ export default function MainLayout({ children }) {
 
   const drawer = (
     <Box>
-      <Toolbar sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 2 }}>
-        <LightbulbIcon color="primary" sx={{ fontSize: 32 }} />
-        <Typography variant="h6" fontWeight="600" color="primary">
+      <Toolbar sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 2 }}>
+        <Box sx={{ width: 32, height: 32, flexShrink: 0 }}>
+          <Logo />
+        </Box>
+        <Typography variant="h6" fontWeight="600" color="text.primary">
           ProDuckt
         </Typography>
       </Toolbar>
