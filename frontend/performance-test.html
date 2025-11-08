@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Performance Test</title>
+  <script>
+    // Mark the start time
+    const startTime = performance.now();
+    console.log('=== PERFORMANCE PROFILING START ===');
+
+    // Track resource loading
+    window.addEventListener('load', () => {
+      const loadTime = performance.now() - startTime;
+      console.log(`Total page load time: ${loadTime}ms`);
+
+      // Get all resource timings
+      const resources = performance.getEntriesByType('resource');
+      console.log('\n=== RESOURCE TIMING ===');
+
+      resources.forEach(resource => {
+        console.log(`${resource.name}: ${resource.duration.toFixed(2)}ms`);
+      });
+
+      // Get navigation timing
+      const navTiming = performance.getEntriesByType('navigation')[0];
+      if (navTiming) {
+        console.log('\n=== NAVIGATION TIMING ===');
+        console.log(`DNS lookup: ${navTiming.domainLookupEnd - navTiming.domainLookupStart}ms`);
+        console.log(`TCP connection: ${navTiming.connectEnd - navTiming.connectStart}ms`);
+        console.log(`Request: ${navTiming.responseStart - navTiming.requestStart}ms`);
+        console.log(`Response: ${navTiming.responseEnd - navTiming.responseStart}ms`);
+        console.log(`DOM processing: ${navTiming.domComplete - navTiming.domLoading}ms`);
+        console.log(`DOM Interactive: ${navTiming.domInteractive - navTiming.domLoading}ms`);
+        console.log(`DOM Content Loaded: ${navTiming.domContentLoadedEventEnd - navTiming.domContentLoadedEventStart}ms`);
+      }
+    });
+  </script>
+</head>
+<body>
+  <h1>Loading http://localhost:5173 in iframe...</h1>
+  <p>Check browser console for performance metrics</p>
+  <iframe src="http://localhost:5173" width="100%" height="800px"></iframe>
+</body>
+</html>

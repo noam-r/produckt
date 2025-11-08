@@ -301,6 +301,9 @@ def _execute_evaluate_readiness(db: Session, job: Job) -> dict:
         evaluated_by=job.created_by
     )
 
+    # Update initiative's readiness_score field for easy access in list views
+    initiative.readiness_score = evaluation_data["readiness_score"]
+
     db.commit()
 
     return {

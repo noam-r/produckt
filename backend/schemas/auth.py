@@ -3,7 +3,7 @@ Authentication schemas for request/response validation.
 """
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 import uuid
 
@@ -66,7 +66,8 @@ class SessionResponse(BaseModel):
     user_id: uuid.UUID = Field(..., description="User ID")
     email: str = Field(..., description="User email")
     name: str = Field(..., description="User name")
-    role: str = Field(..., description="User role")
+    role: str = Field(..., description="User role (legacy)")
+    roles: List[str] = Field(default_factory=list, description="User roles for RBAC")
     organization_id: uuid.UUID = Field(..., description="Organization ID")
     organization_name: str = Field(..., description="Organization name")
     expires_at: datetime = Field(..., description="Session expiration timestamp")

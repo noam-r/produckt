@@ -28,6 +28,8 @@ import {
   LightMode,
   DarkMode,
   Logout,
+  People as PeopleIcon,
+  AdminPanelSettings as AdminIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -38,6 +40,10 @@ const drawerWidth = 260;
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   { text: 'Initiatives', icon: <LightbulbIcon />, path: '/initiatives' },
+];
+
+const adminMenuItems = [
+  { text: 'Users', icon: <PeopleIcon />, path: '/admin/users' },
   { text: 'Context', icon: <SettingsIcon />, path: '/context' },
 ];
 
@@ -45,6 +51,9 @@ export default function MainLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+
+  // Check if user has admin role
+  const isAdmin = user?.roles?.includes('admin') || false;
   const { mode, toggleTheme } = useTheme();
   const muiTheme = useMuiTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
@@ -88,6 +97,8 @@ export default function MainLayout({ children }) {
         </Typography>
       </Toolbar>
       <Divider />
+
+      {/* Main Navigation */}
       <List sx={{ px: 1, pt: 2 }}>
         {menuItems.map((item) => {
           const isActive = location.pathname === item.path;
@@ -129,6 +140,65 @@ export default function MainLayout({ children }) {
           );
         })}
       </List>
+
+      {/* Admin Section */}
+      {isAdmin && (
+        <>
+          <Divider sx={{ my: 2 }} />
+          <Box sx={{ px: 2, mb: 1 }}>
+            <Typography
+              variant="overline"
+              color="text.secondary"
+              fontWeight="600"
+              sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+            >
+              <AdminIcon fontSize="small" />
+              ADMIN
+            </Typography>
+          </Box>
+          <List sx={{ px: 1 }}>
+            {adminMenuItems.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+                  <ListItemButton
+                    selected={isActive}
+                    onClick={() => handleNavigation(item.path)}
+                    sx={{
+                      borderRadius: 2,
+                      '&.Mui-selected': {
+                        backgroundColor: 'primary.main',
+                        color: 'primary.contrastText',
+                        '&:hover': {
+                          backgroundColor: 'primary.dark',
+                        },
+                        '& .MuiListItemIcon-root': {
+                          color: 'primary.contrastText',
+                        },
+                      },
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        color: isActive ? 'inherit' : 'text.secondary',
+                        minWidth: 40,
+                      }}
+                    >
+                      {item.icon}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.text}
+                      primaryTypographyProps={{
+                        fontWeight: isActive ? 600 : 400,
+                      }}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
+          </List>
+        </>
+      )}
     </Box>
   );
 
@@ -155,7 +225,9 @@ export default function MainLayout({ children }) {
           </IconButton>
 
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {menuItems.find((item) => item.path === location.pathname)?.text || 'ProDuckt'}
+            {menuItems.find((item) => item.path === location.pathname)?.text ||
+             adminMenuItems.find((item) => item.path === location.pathname)?.text ||
+             'ProDuckt'}
           </Typography>
 
           {/* Theme Toggle */}

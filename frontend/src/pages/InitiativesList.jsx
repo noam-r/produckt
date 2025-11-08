@@ -12,10 +12,6 @@ import {
   CircularProgress,
   Alert,
   Fab,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   Table,
   TableBody,
   TableCell,
@@ -25,41 +21,30 @@ import {
   TableSortLabel,
   IconButton,
   Tooltip,
+  LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Paper,
 } from '@mui/material';
 import {
   Search,
   Add,
   Visibility,
-  FilterList,
+  PreviewOutlined,
 } from '@mui/icons-material';
+import ReactMarkdown from 'react-markdown';
 import { useInitiatives } from '../hooks/useInitiatives';
 import MainLayout from '../layouts/MainLayout';
 
-// Status options
-const statusOptions = [
-  { value: '', label: 'All Statuses' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'IN_DISCOVERY', label: 'In Discovery' },
-  { value: 'IN_QA', label: 'In Q&A' },
-  { value: 'READY_FOR_MRD', label: 'Ready for MRD' },
-  { value: 'COMPLETED', label: 'Completed' },
-];
-
-// Status color mapping
-const statusColors = {
-  DRAFT: 'default',
-  IN_DISCOVERY: 'info',
-  IN_QA: 'warning',
-  READY_FOR_MRD: 'secondary',
-  COMPLETED: 'success',
-};
 
 export default function InitiativesList() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [orderBy, setOrderBy] = useState('created_at');
   const [order, setOrder] = useState('desc');
+  const [previewInitiative, setPreviewInitiative] = useState(null);
 
   const { data: initiatives, isLoading, error } = useInitiatives();
 
@@ -70,8 +55,7 @@ export default function InitiativesList() {
         .toLowerCase()
         .includes(searchTerm.toLowerCase()) ||
         initiative.description?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = !statusFilter || initiative.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      return matchesSearch;
     })
     .sort((a, b) => {
       const aValue = a[orderBy] || '';
@@ -119,35 +103,19 @@ export default function InitiativesList() {
         {/* Filters */}
         <Card elevation={2} sx={{ mb: 3 }}>
           <CardContent>
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <TextField
-                placeholder="Search initiatives..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                sx={{ flex: 1, minWidth: 250 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <FormControl sx={{ minWidth: 200 }}>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={statusFilter}
-                  label="Status"
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  {statusOptions.map((option) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
+            <TextField
+              placeholder="Search initiatives..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              fullWidth
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search />
+                  </InputAdornment>
+                ),
+              }}
+            />
           </CardContent>
         </Card>
 
@@ -169,14 +137,14 @@ export default function InitiativesList() {
             {!isLoading && !error && filteredInitiatives.length === 0 && (
               <Box sx={{ textAlign: 'center', py: 8 }}>
                 <Typography variant="h6" color="text.secondary" gutterBottom>
-                  {searchTerm || statusFilter ? 'No initiatives found' : 'No initiatives yet'}
+                  {searchTerm ? 'No initiatives found' : 'No initiatives yet'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  {searchTerm || statusFilter
-                    ? 'Try adjusting your filters'
+                  {searchTerm
+                    ? 'Try adjusting your search'
                     : 'Create your first initiative to get started'}
                 </Typography>
-                {!searchTerm && !statusFilter && (
+                {!searchTerm && (
                   <Button
                     variant="outlined"
                     startIcon={<Add />}
@@ -196,21 +164,20 @@ export default function InitiativesList() {
                     <TableRow>
                       <TableCell>
                         <TableSortLabel
-                          active={orderBy === 'name'}
-                          direction={orderBy === 'name' ? order : 'asc'}
-                          onClick={() => handleSort('name')}
+                          active={orderBy === 'title'}
+                          direction={orderBy === 'title' ? order : 'asc'}
+                          onClick={() => handleSort('title')}
                         >
                           Name
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell>Description</TableCell>
-                      <TableCell>
+                      <TableCell align="center" sx={{ minWidth: 200 }}>
                         <TableSortLabel
-                          active={orderBy === 'status'}
-                          direction={orderBy === 'status' ? order : 'asc'}
-                          onClick={() => handleSort('status')}
+                          active={orderBy === 'completion_percentage'}
+                          direction={orderBy === 'completion_percentage' ? order : 'asc'}
+                          onClick={() => handleSort('completion_percentage')}
                         >
-                          Status
+                          Progress
                         </TableSortLabel>
                       </TableCell>
                       <TableCell>
@@ -243,26 +210,30 @@ export default function InitiativesList() {
                             {initiative.title}
                           </Typography>
                         </TableCell>
-                        <TableCell>
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              maxWidth: 300,
-                            }}
-                          >
-                            {initiative.description || 'No description'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={initiative.status.replace('_', ' ')}
-                            color={statusColors[initiative.status]}
-                            size="small"
-                          />
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 150 }}>
+                            <Box sx={{ flex: 1 }}>
+                              <LinearProgress
+                                variant="determinate"
+                                value={initiative.completion_percentage || 0}
+                                sx={{
+                                  height: 8,
+                                  borderRadius: 1,
+                                  backgroundColor: 'action.hover',
+                                  '& .MuiLinearProgress-bar': {
+                                    borderRadius: 1,
+                                    backgroundColor:
+                                      (initiative.completion_percentage || 0) === 100 ? 'success.main' :
+                                      (initiative.completion_percentage || 0) >= 75 ? 'primary.main' :
+                                      (initiative.completion_percentage || 0) >= 50 ? 'warning.main' : 'error.main'
+                                  }
+                                }}
+                              />
+                            </Box>
+                            <Typography variant="body2" sx={{ minWidth: 40, fontWeight: 500 }}>
+                              {initiative.completion_percentage || 0}%
+                            </Typography>
+                          </Box>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" color="text.secondary">
@@ -270,17 +241,30 @@ export default function InitiativesList() {
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
-                          <Tooltip title="View Details">
-                            <IconButton
-                              size="small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRowClick(initiative.id);
-                              }}
-                            >
-                              <Visibility fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                            <Tooltip title="Preview">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewInitiative(initiative);
+                                }}
+                              >
+                                <PreviewOutlined fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="View Details">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRowClick(initiative.id);
+                                }}
+                              >
+                                <Visibility fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -312,6 +296,145 @@ export default function InitiativesList() {
         >
           <Add />
         </Fab>
+
+        {/* Preview Modal */}
+        <Dialog
+          open={Boolean(previewInitiative)}
+          onClose={() => setPreviewInitiative(null)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            <Typography variant="h5" fontWeight="600">
+              {previewInitiative?.title}
+            </Typography>
+          </DialogTitle>
+          <DialogContent dividers>
+            {/* Status Overview - At the top, prominent */}
+            <Paper elevation={0} sx={{ bgcolor: 'action.hover', p: 3, mb: 3, borderRadius: 2 }}>
+              <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* Progress */}
+                <Box sx={{ flex: '1 1 200px' }}>
+                  <Typography variant="overline" color="text.secondary" fontWeight="600">
+                    Progress
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                    <LinearProgress
+                      variant="determinate"
+                      value={previewInitiative?.completion_percentage || 0}
+                      sx={{
+                        flex: 1,
+                        height: 10,
+                        borderRadius: 1,
+                        backgroundColor: 'background.paper',
+                        '& .MuiLinearProgress-bar': {
+                          borderRadius: 1,
+                          backgroundColor:
+                            (previewInitiative?.completion_percentage || 0) === 100 ? 'success.main' :
+                            (previewInitiative?.completion_percentage || 0) >= 75 ? 'primary.main' :
+                            (previewInitiative?.completion_percentage || 0) >= 50 ? 'warning.main' : 'error.main'
+                        }
+                      }}
+                    />
+                    <Typography variant="h6" fontWeight="600">
+                      {previewInitiative?.completion_percentage || 0}%
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Created Date */}
+                <Box>
+                  <Typography variant="overline" color="text.secondary" fontWeight="600">
+                    Created
+                  </Typography>
+                  <Typography variant="body1" sx={{ mt: 0.5 }}>
+                    {previewInitiative?.created_at && new Date(previewInitiative.created_at).toLocaleDateString()}
+                  </Typography>
+                </Box>
+
+                {/* Workflow Status */}
+                <Box sx={{ flex: '1 1 100%' }}>
+                  <Typography variant="overline" color="text.secondary" fontWeight="600" display="block" gutterBottom>
+                    Workflow Status
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+                    <Chip
+                      label="Questions"
+                      size="medium"
+                      color={previewInitiative?.has_questions ? 'success' : 'default'}
+                      variant={previewInitiative?.has_questions ? 'filled' : 'outlined'}
+                    />
+                    <Chip
+                      label="Evaluation"
+                      size="medium"
+                      color={previewInitiative?.has_evaluation ? 'success' : 'default'}
+                      variant={previewInitiative?.has_evaluation ? 'filled' : 'outlined'}
+                    />
+                    <Chip
+                      label="MRD"
+                      size="medium"
+                      color={previewInitiative?.has_mrd ? 'success' : 'default'}
+                      variant={previewInitiative?.has_mrd ? 'filled' : 'outlined'}
+                    />
+                    <Chip
+                      label="Scored"
+                      size="medium"
+                      color={previewInitiative?.has_scores ? 'success' : 'default'}
+                      variant={previewInitiative?.has_scores ? 'filled' : 'outlined'}
+                    />
+                  </Box>
+                </Box>
+              </Box>
+            </Paper>
+
+            {/* Description - With Markdown rendering */}
+            <Box>
+              <Typography variant="h6" gutterBottom fontWeight="600">
+                Description
+              </Typography>
+              <Box
+                sx={{
+                  '& p': { mb: 2 },
+                  '& h1, & h2, & h3, & h4, & h5, & h6': { mt: 2, mb: 1, fontWeight: 600 },
+                  '& ul, & ol': { pl: 3, mb: 2 },
+                  '& strong': { fontWeight: 600 },
+                  '& code': {
+                    bgcolor: 'action.hover',
+                    px: 0.5,
+                    py: 0.25,
+                    borderRadius: 0.5,
+                    fontFamily: 'monospace',
+                    fontSize: '0.875em'
+                  },
+                  '& pre': {
+                    bgcolor: 'action.hover',
+                    p: 2,
+                    borderRadius: 1,
+                    overflow: 'auto'
+                  }
+                }}
+              >
+                <ReactMarkdown>
+                  {previewInitiative?.description || 'No description available'}
+                </ReactMarkdown>
+              </Box>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setPreviewInitiative(null)}>
+              Close
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => {
+                setPreviewInitiative(null);
+                navigate(`/initiatives/${previewInitiative?.id}`);
+              }}
+            >
+              View Details
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </MainLayout>
   );

@@ -3,36 +3,69 @@ import { authApi } from '../api/auth';
 
 const AuthContext = createContext(null);
 
+const SESSION_CACHE_KEY = 'produck_session_cache';
+
+// Helper to transform session data to user object
+const transformSessionToUser = (sessionData) => ({
+  id: sessionData.user_id,
+  email: sessionData.email,
+  name: sessionData.name,
+  role: sessionData.role, // Legacy single role
+  roles: sessionData.roles || [], // Multiple roles for RBAC
+  organization_id: sessionData.organization_id,
+  organization_name: sessionData.organization_name,
+});
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed to false - non-blocking by default
   const [error, setError] = useState(null);
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
 
-  // Check for existing session on mount
+  // Check for existing session on mount - optimistic with cache
   useEffect(() => {
+    // Try to load from cache first (instant, optimistic)
+    try {
+      const cached = localStorage.getItem(SESSION_CACHE_KEY);
+      if (cached) {
+        const cachedUser = JSON.parse(cached);
+        setUser(cachedUser); // Optimistically set user from cache
+      }
+    } catch (e) {
+      // Ignore cache errors, will verify with server
+      console.warn('Failed to load cached session:', e);
+    }
+
+    // Then verify with server in background (non-blocking)
     checkSession();
   }, []);
 
   const checkSession = async () => {
     try {
-      setLoading(true);
       const sessionData = await authApi.getSession();
-      // Backend returns flat structure, create user object
-      const user = {
-        id: sessionData.user_id,
-        email: sessionData.email,
-        name: sessionData.name,
-        role: sessionData.role,
-        organization_id: sessionData.organization_id,
-        organization_name: sessionData.organization_name,
-      };
+      const user = transformSessionToUser(sessionData);
+
       setUser(user);
       setError(null);
+
+      // Cache the session for fast subsequent loads
+      try {
+        localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(user));
+      } catch (e) {
+        console.warn('Failed to cache session:', e);
+      }
     } catch (err) {
       // No active session or session expired
       setUser(null);
+
+      // Clear cache
+      try {
+        localStorage.removeItem(SESSION_CACHE_KEY);
+      } catch (e) {
+        // Ignore
+      }
     } finally {
-      setLoading(false);
+      setInitialCheckDone(true);
     }
   };
 
@@ -41,17 +74,18 @@ export function AuthProvider({ children }) {
       setError(null);
       const response = await authApi.login({ email, password });
       console.log('Login response:', response);
-      // Backend returns flat structure, create user object
-      const user = {
-        id: response.user_id,
-        email: response.email,
-        name: response.name,
-        role: response.role,
-        organization_id: response.organization_id,
-        organization_name: response.organization_name,
-      };
+
+      const user = transformSessionToUser(response);
       console.log('Setting user:', user);
       setUser(user);
+
+      // Cache the session
+      try {
+        localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(user));
+      } catch (e) {
+        console.warn('Failed to cache session:', e);
+      }
+
       console.log('User state should be updated');
       return { success: true };
     } catch (err) {
@@ -70,16 +104,17 @@ export function AuthProvider({ children }) {
         full_name: fullName,
         organization_name: organizationName,
       });
-      // Backend returns flat structure, create user object
-      const user = {
-        id: response.user_id,
-        email: response.email,
-        name: response.name,
-        role: response.role,
-        organization_id: response.organization_id,
-        organization_name: response.organization_name,
-      };
+
+      const user = transformSessionToUser(response);
       setUser(user);
+
+      // Cache the session
+      try {
+        localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(user));
+      } catch (e) {
+        console.warn('Failed to cache session:', e);
+      }
+
       return { success: true };
     } catch (err) {
       const errorMessage = err.response?.data?.detail || 'Registration failed';
@@ -96,6 +131,13 @@ export function AuthProvider({ children }) {
     } finally {
       setUser(null);
       setError(null);
+
+      // Clear cache
+      try {
+        localStorage.removeItem(SESSION_CACHE_KEY);
+      } catch (e) {
+        // Ignore
+      }
     }
   };
 
@@ -103,6 +145,7 @@ export function AuthProvider({ children }) {
     user,
     loading,
     error,
+    initialCheckDone,
     login,
     register,
     logout,

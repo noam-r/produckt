@@ -183,20 +183,12 @@ export default function InitiativeDetail() {
     if (hasMRD) activeStep = 4;
     if (hasScores) activeStep = 5;
 
-    // Calculate readiness score dynamically to reflect current progress
-    let readinessScore = 0;
+    // Use initiative.readiness_score as single source of truth
+    // This is set by the evaluation agent and provides consistent readiness across the app
+    let readinessScore = initiative.readiness_score || 0;
 
-    // If all workflow steps are complete, show 100%
-    if (hasQuestions && allAnswered && hasEvaluation && hasMRD && hasScores) {
-      readinessScore = 100;
-    } else if (mrd?.readiness_at_generation) {
-      // Use MRD snapshot if available (but not if all steps are complete)
-      readinessScore = mrd.readiness_at_generation;
-    } else if (evaluation?.readiness_score) {
-      // Use evaluation score if no MRD yet
-      readinessScore = evaluation.readiness_score;
-    } else {
-      // Fallback calculation for early stages
+    // If no evaluation has run yet, calculate a basic progress score
+    if (!initiative.readiness_score) {
       const descriptionQuality = initiative.description?.length > 100 ? 20 : 10;
       const questionsGenerated = hasQuestions ? 20 : 0;
       const questionsAnswered = totalQuestions > 0 ? (completedCount / totalQuestions) * 40 : 0;

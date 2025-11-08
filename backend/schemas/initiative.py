@@ -40,6 +40,13 @@ class InitiativeResponse(InitiativeBase):
     created_at: datetime
     updated_at: datetime
 
+    # Workflow completion tracking
+    has_questions: bool = False
+    has_evaluation: bool = False
+    has_mrd: bool = False
+    has_scores: bool = False
+    completion_percentage: int = 0
+
     model_config = {"from_attributes": True}
 
 

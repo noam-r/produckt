@@ -11,6 +11,7 @@ import InitiativesList from './pages/InitiativesList';
 import InitiativeDetail from './pages/InitiativeDetail';
 import InitiativeForm from './pages/InitiativeForm';
 import ContextManagement from './pages/ContextManagement';
+import UsersManagement from './pages/UsersManagement';
 
 function App() {
   return (
@@ -71,6 +72,16 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <ContextManagement />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Admin routes */}
+              <Route
+                path="/admin/users"
+                element={
+                  <ProtectedRoute>
+                    <UsersManagement />
                   </ProtectedRoute>
                 }
               />

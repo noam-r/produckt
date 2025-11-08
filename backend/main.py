@@ -91,7 +91,7 @@ async def debug_config():
 
 
 # Import and include routers
-from backend.routers import auth, initiatives, questions, context, agents, jobs
+from backend.routers import auth, initiatives, questions, context, agents, jobs, admin
 
 app.include_router(auth.router)
 app.include_router(initiatives.router, prefix="/api")
@@ -99,6 +99,7 @@ app.include_router(questions.router, prefix="/api")
 app.include_router(context.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(jobs.router)
+app.include_router(admin.router, prefix="/api")
 
 # Additional routers will be added in later stages
 # from backend.routers import context, users, questions

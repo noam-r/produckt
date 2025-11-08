@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Loading Diagnostic</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+    .log {
+      background: #252526;
+      padding: 10px;
+      margin: 5px 0;
+      border-left: 3px solid #007acc;
+    }
+    .error { border-left-color: #f48771; }
+    .success { border-left-color: #89d185; }
+    .timing {
+      font-weight: bold;
+      color: #4ec9b0;
+    }
+  </style>
+</head>
+<body>
+  <h1>ProDuckt Loading Diagnostic</h1>
+  <div id="logs"></div>
+
+  <script>
+    const logs = document.getElementById('logs');
+    const startTime = performance.now();
+
+    function log(message, type = 'log') {
+      const elapsed = (performance.now() - startTime).toFixed(2);
+      const div = document.createElement('div');
+      div.className = `log ${type}`;
+      div.innerHTML = `<span class="timing">[${elapsed}ms]</span> ${message}`;
+      logs.appendChild(div);
+      console.log(`[${elapsed}ms]`, message);
+    }
+
+    log('Starting diagnostics...', 'log');
+
+    // Test backend
+    log('Testing backend API...', 'log');
+    fetch('http://localhost:8000/api/auth/session', { credentials: 'include' })
+      .then(res => {
+        const time = (performance.now() - startTime).toFixed(2);
+        if (res.ok) {
+          log(`Backend API responded in ${time}ms (Status: ${res.status})`, 'success');
+        } else {
+          log(`Backend API responded in ${time}ms (Status: ${res.status} - Expected 401 if not logged in)`, 'log');
+        }
+      })
+      .catch(err => {
+        log(`Backend API error: ${err.message}`, 'error');
+      });
+
+    // Test frontend load time
+    log('Loading main React app...', 'log');
+    const iframe = document.createElement('iframe');
+    iframe.src = 'http://localhost:5175/';
+    iframe.style.width = '100%';
+    iframe.style.height = '600px';
+    iframe.style.border = '1px solid #007acc';
+    iframe.style.marginTop = '20px';
+
+    let iframeLoaded = false;
+    iframe.onload = () => {
+      if (!iframeLoaded) {
+        iframeLoaded = true;
+        const time = (performance.now() - startTime).toFixed(2);
+        log(`React app iframe loaded in ${time}ms`, 'success');
+
+        // Try to access iframe's performance data
+        try {
+          const iframeWin = iframe.contentWindow;
+          if (iframeWin && iframeWin.performance) {
+            const nav = iframeWin.performance.getEntriesByType('navigation')[0];
+            if (nav) {
+              log(`Iframe DOM Interactive: ${nav.domInteractive.toFixed(2)}ms`, 'log');
+              log(`Iframe DOM Complete: ${nav.domComplete.toFixed(2)}ms`, 'log');
+            }
+
+            // Check for slow resources
+            const resources = iframeWin.performance.getEntriesByType('resource');
+            const slowResources = resources.filter(r => r.duration > 100);
+            if (slowResources.length > 0) {
+              log(`Found ${slowResources.length} slow resources (>100ms):`, 'error');
+              slowResources.forEach(r => {
+                log(`  - ${r.name.split('/').pop()}: ${r.duration.toFixed(2)}ms`, 'error');
+              });
+            }
+          }
+        } catch (e) {
+          log(`Could not access iframe performance data (CORS): ${e.message}`, 'log');
+        }
+      }
+    };
+
+    document.body.appendChild(iframe);
+
+    // Monitor for long tasks
+    if ('PerformanceObserver' in window) {
+      try {
+        const observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (entry.duration > 50) {
+              log(`Long task detected: ${entry.duration.toFixed(2)}ms`, 'error');
+            }
+          }
+        });
+        observer.observe({ entryTypes: ['longtask'] });
+      } catch (e) {
+        log('Long task monitoring not available', 'log');
+      }
+    }
+  </script>
+</body>
+</html>

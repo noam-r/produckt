@@ -6,7 +6,7 @@ For production, this should be replaced with Redis or a database-backed session 
 
 import secrets
 from datetime import datetime, timedelta
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from dataclasses import dataclass
 import uuid
 
@@ -21,7 +21,8 @@ class Session:
     user_id: uuid.UUID
     email: str
     name: str
-    role: str
+    role: str  # Legacy single role (deprecated)
+    roles: List[str]  # Multiple roles for RBAC
     organization_id: uuid.UUID
     organization_name: str
     created_at: datetime
@@ -51,7 +52,8 @@ class SessionManager:
         name: str,
         role: str,
         organization_id: uuid.UUID,
-        organization_name: str
+        organization_name: str,
+        roles: Optional[List[str]] = None
     ) -> Session:
         """Create a new session for a user."""
         session_id = f"sess_{secrets.token_urlsafe(32)}"
@@ -63,7 +65,8 @@ class SessionManager:
             user_id=user_id,
             email=email,
             name=name,
-            role=role,
+            role=role,  # Legacy single role for backward compatibility
+            roles=roles or [],  # Multiple roles for RBAC
             organization_id=organization_id,
             organization_name=organization_name,
             created_at=now,

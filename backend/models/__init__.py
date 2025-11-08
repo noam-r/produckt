@@ -2,7 +2,9 @@
 Database models for ProDuckt.
 """
 
-from backend.models.user import User, UserRole
+from backend.models.user import User, UserRoleEnum
+from backend.models.role import Role
+from backend.models.user_role import UserRole
 from backend.models.organization import Organization
 from backend.models.context import Context
 from backend.models.initiative import Initiative, InitiativeStatus
@@ -17,6 +19,8 @@ from backend.models.audit_log import AuditLog
 
 __all__ = [
     "User",
+    "UserRoleEnum",
+    "Role",
     "UserRole",
     "Organization",
     "Context",

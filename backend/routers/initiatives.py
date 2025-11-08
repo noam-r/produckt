@@ -4,6 +4,7 @@ Initiative API endpoints.
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import Optional
 from uuid import UUID
 
@@ -18,6 +19,55 @@ from backend.auth.dependencies import get_current_user, require_product_manager
 
 
 router = APIRouter(prefix="/initiatives", tags=["Initiatives"])
+
+
+def enrich_initiative_with_workflow_data(initiative: Initiative, db: Session) -> dict:
+    """Add workflow completion data to initiative for response."""
+    # Check what workflow steps are complete
+    has_questions = db.query(Initiative).filter(
+        Initiative.id == initiative.id
+    ).join(Initiative.questions).first() is not None
+
+    has_evaluation = db.execute(
+        text("SELECT 1 FROM evaluations WHERE initiative_id = :id LIMIT 1"),
+        {"id": str(initiative.id)}
+    ).first() is not None
+
+    has_mrd = db.execute(
+        text("SELECT 1 FROM mrds WHERE initiative_id = :id LIMIT 1"),
+        {"id": str(initiative.id)}
+    ).first() is not None
+
+    has_scores = db.execute(
+        text("SELECT 1 FROM scores WHERE initiative_id = :id LIMIT 1"),
+        {"id": str(initiative.id)}
+    ).first() is not None
+
+    # Calculate completion percentage (4 main steps: questions, evaluation, MRD, scores)
+    steps_complete = sum([has_questions, has_evaluation, has_mrd, has_scores])
+    completion_percentage = (steps_complete / 4) * 100
+
+    # Convert initiative to dict and add workflow fields
+    initiative_dict = {
+        "id": initiative.id,
+        "title": initiative.title,
+        "description": initiative.description,
+        "status": initiative.status,
+        "readiness_score": initiative.readiness_score,
+        "iteration_count": initiative.iteration_count,
+        "organization_id": initiative.organization_id,
+        "created_by": initiative.created_by,
+        "context_snapshot_id": initiative.context_snapshot_id,
+        "created_at": initiative.created_at,
+        "updated_at": initiative.updated_at,
+        "has_questions": has_questions,
+        "has_evaluation": has_evaluation,
+        "has_mrd": has_mrd,
+        "has_scores": has_scores,
+        "completion_percentage": int(completion_percentage),
+    }
+
+    return initiative_dict
 
 
 @router.post("", response_model=InitiativeResponse, status_code=status.HTTP_201_CREATED)
@@ -80,8 +130,14 @@ def list_initiatives(
 
     total = repo.count(organization_id=current_user.organization_id)
 
+    # Enrich initiatives with workflow completion data
+    enriched_initiatives = [
+        enrich_initiative_with_workflow_data(initiative, db)
+        for initiative in initiatives
+    ]
+
     return InitiativeListResponse(
-        initiatives=initiatives,
+        initiatives=enriched_initiatives,
         total=total,
         limit=limit,
         offset=offset

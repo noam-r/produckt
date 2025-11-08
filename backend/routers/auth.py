@@ -3,11 +3,12 @@ Authentication endpoints for user registration, login, and session management.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Cookie, Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 
 from backend.database import get_db
-from backend.models import User, Organization, UserRole
+from backend.models import User, Organization, UserRoleEnum
+from backend.models.user_role import UserRole as UserRoleAssociation
 from backend.schemas.auth import (
     RegisterRequest, LoginRequest, SessionResponse, MessageResponse
 )
@@ -42,14 +43,14 @@ def register(
 
     # Determine organization
     organization = None
-    user_role = UserRole.CONTRIBUTOR  # Default role for joining existing org
+    user_role = UserRoleEnum.CONTRIBUTOR  # Default role for joining existing org
 
     if request.organization_name:
         # Create new organization
         organization = Organization(name=request.organization_name)
         db.add(organization)
         db.flush()  # Get the ID without committing
-        user_role = UserRole.PRODUCT_MANAGER  # Creator gets PM role
+        user_role = UserRoleEnum.PRODUCT_MANAGER  # Creator gets PM role
 
     elif request.organization_id:
         # Join existing organization
@@ -85,14 +86,15 @@ def register(
     db.refresh(user)
     db.refresh(organization)
 
-    # Create session
+    # Create session (new users don't have many-to-many roles yet, just legacy role)
     session = session_manager.create_session(
         user_id=user.id,
         email=user.email,
         name=user.name,
         role=user.role.value,
         organization_id=organization.id,
-        organization_name=organization.name
+        organization_name=organization.name,
+        roles=[]  # Empty roles for new users
     )
 
     # Set session cookie
@@ -111,6 +113,7 @@ def register(
         email=session.email,
         name=session.name,
         role=session.role,
+        roles=session.roles,
         organization_id=session.organization_id,
         organization_name=session.organization_name,
         expires_at=session.expires_at
@@ -128,8 +131,10 @@ def login(
 
     Returns session information and sets a session cookie.
     """
-    # Find user by email
-    user = db.query(User).filter(User.email == request.email).first()
+    # Find user by email and eagerly load roles
+    user = db.query(User).filter(User.email == request.email).options(
+        joinedload(User.user_roles).joinedload(UserRoleAssociation.role)
+    ).first()
 
     if not user or not verify_password(request.password, user.password_hash):
         raise HTTPException(
@@ -159,14 +164,18 @@ def login(
     user.last_login_at = datetime.utcnow()
     db.commit()
 
-    # Create session
+    # Get user role names
+    role_names = [ur.role.name for ur in user.user_roles]
+
+    # Create session with roles
     session = session_manager.create_session(
         user_id=user.id,
         email=user.email,
         name=user.name,
-        role=user.role.value,
+        role=user.role.value,  # Legacy single role
         organization_id=organization.id,
-        organization_name=organization.name
+        organization_name=organization.name,
+        roles=role_names  # Multiple roles for RBAC
     )
 
     # Set session cookie
@@ -185,6 +194,7 @@ def login(
         email=session.email,
         name=session.name,
         role=session.role,
+        roles=session.roles,
         organization_id=session.organization_id,
         organization_name=session.organization_name,
         expires_at=session.expires_at
@@ -237,6 +247,7 @@ def get_session(session_id: Optional[str] = Cookie(None)):
         email=session.email,
         name=session.name,
         role=session.role,
+        roles=session.roles,
         organization_id=session.organization_id,
         organization_name=session.organization_name,
         expires_at=session.expires_at
