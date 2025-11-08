@@ -17,6 +17,7 @@ class AnswerStatus(str, enum.Enum):
     ANSWERED = "Answered"  # User provided answer
     UNKNOWN = "Unknown"  # User explicitly doesn't know
     SKIPPED = "Skipped"  # User chose to skip
+    ESTIMATED = "Estimated"  # User provided estimate (affects scoring confidence)
 
 
 class Answer(Base):
@@ -40,8 +41,9 @@ class Answer(Base):
 
     # Answer content
     answer_text = Column(Text, nullable=True)  # Nullable if status=Unknown/Skipped
-    answer_status = Column(Enum(AnswerStatus), nullable=False)  # NEW: status field
-    skip_reason = Column(Text, nullable=True)  # NEW: optional reason for skipping
+    answer_status = Column(Enum(AnswerStatus), nullable=False)  # Status field
+    skip_reason = Column(Text, nullable=True)  # Optional reason for skipping
+    estimation_confidence = Column(Text, nullable=True)  # For ESTIMATED status: "Low", "Medium", "High"
 
     # Metadata
     answered_by = Column(

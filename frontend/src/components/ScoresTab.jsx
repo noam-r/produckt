@@ -14,6 +14,7 @@ import {
   Paper,
   Dialog,
   DialogContent,
+  Snackbar,
 } from '@mui/material';
 import {
   AutoAwesome,
@@ -21,10 +22,14 @@ import {
   CheckCircle,
   Refresh,
   Download,
+  Warning,
+  HelpOutline,
 } from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { initiativesApi } from '../api/initiatives';
 import { useCalculateScores } from '../hooks/useInitiatives';
+import { useJobPolling } from '../hooks/useJobPolling';
+import ScoringGapDialog from './ScoringGapDialog';
 
 // Score interpretation
 const getRiceScoreLevel = (score) => {
@@ -43,8 +48,12 @@ const getFdvScoreLevel = (score) => {
 };
 
 export default function ScoresTab({ initiativeId }) {
-  const [calculating, setCalculating] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [gapDialogOpen, setGapDialogOpen] = useState(false);
+  const [gapAnalysis, setGapAnalysis] = useState(null);
+  const [currentJobId, setCurrentJobId] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const queryClient = useQueryClient();
 
   // Fetch scores
   const {
@@ -58,17 +67,87 @@ export default function ScoresTab({ initiativeId }) {
     retry: false,
   });
 
-  const calculateScores = useCalculateScores();
+  // Poll job status
+  const {
+    isPolling: calculating,
+    progress,
+    progressMessage,
+  } = useJobPolling(currentJobId, {
+    pollInterval: 1000, // Poll every second
+    onComplete: async (result) => {
+      console.log('Job completed:', result);
+      setCurrentJobId(null);
+
+      // Check if this was a gap analysis job
+      if (result && result.gap_analysis) {
+        const hasImprovementQuestions = result.gap_analysis.blocking_gaps && result.gap_analysis.blocking_gaps.length > 0;
+        const currentConfidence = result.gap_analysis.current_confidence;
+        const message = result.gap_analysis.message;
+
+        if (hasImprovementQuestions) {
+          // Show improvement questions to increase confidence
+          setGapAnalysis(result.gap_analysis);
+          setGapDialogOpen(true);
+        } else {
+          // Confidence already high - no improvement needed
+          await refetch();
+          setSuccessMessage(message || `Confidence is already ${currentConfidence}% - no improvement needed!`);
+        }
+      } else {
+        // This was a score calculation job - just refresh
+        await refetch();
+        setSuccessMessage('Scores updated successfully!');
+      }
+    },
+    onError: (error) => {
+      console.error('Job failed:', error);
+      setCurrentJobId(null);
+      alert(`Job failed: ${error.message || error}`);
+    },
+  });
+
+  const handleAnalyzeAndCalculate = async () => {
+    try {
+      // Start score calculation job
+      const response = await initiativesApi.calculateScores(initiativeId);
+      setCurrentJobId(response.job_id);
+    } catch (err) {
+      console.error('Failed to start score calculation:', err);
+      alert('Failed to start score calculation');
+    }
+  };
 
   const handleCalculateScores = async () => {
-    setCalculating(true);
     try {
-      await calculateScores.mutateAsync(initiativeId);
-      await refetch();
+      // Start score calculation job
+      const response = await initiativesApi.calculateScores(initiativeId);
+      setCurrentJobId(response.job_id);
     } catch (err) {
-      // Error handling in mutation
-    } finally {
-      setCalculating(false);
+      console.error('Failed to start score calculation:', err);
+      alert('Failed to start score calculation');
+    }
+  };
+
+  const handleImproveConfidence = async () => {
+    try {
+      // Start gap analysis job
+      const response = await initiativesApi.analyzeScoringGaps(initiativeId);
+      setCurrentJobId(response.job_id);
+
+      // Poll until gap analysis completes
+      // The useJobPolling hook will handle this automatically
+      // When complete, it will trigger onComplete which shows the gap dialog
+    } catch (err) {
+      console.error('Failed to start gap analysis:', err);
+      alert('Failed to start gap analysis');
+    }
+  };
+
+  const handleGapDialogClose = async (submitted) => {
+    setGapDialogOpen(false);
+    if (submitted) {
+      // User submitted gap answers - now recalculate scores
+      await handleCalculateScores();
     }
   };
 
@@ -114,11 +193,11 @@ export default function ScoresTab({ initiativeId }) {
         <Button
           variant="contained"
           startIcon={calculating ? <CircularProgress size={20} /> : <AutoAwesome />}
-          onClick={handleCalculateScores}
+          onClick={handleAnalyzeAndCalculate}
           disabled={calculating}
           size="large"
         >
-          {calculating ? 'Calculating Scores...' : 'Calculate Scores'}
+          {calculating ? 'Analyzing...' : 'Calculate Scores'}
         </Button>
         <Alert severity="info" sx={{ mt: 3, maxWidth: 600, mx: 'auto' }}>
           Note: Scores are calculated based on your initiative details, answered questions, and
@@ -165,10 +244,76 @@ export default function ScoresTab({ initiativeId }) {
         </Box>
       </Box>
 
+      {/* Estimation Warning */}
+      {scores.data_quality?.estimated_answers_count > 0 && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          <Typography variant="body2" gutterBottom>
+            <strong>Scores Based on Estimates</strong>
+          </Typography>
+          <Typography variant="body2">
+            This scorecard includes {scores.data_quality.estimated_answers_count} estimated answer(s).
+            RICE Confidence has been reduced by {scores.data_quality.confidence_penalty_applied} to reflect
+            data uncertainty. Consider replacing estimates with precise data to improve scoring accuracy.
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Data Quality Warnings */}
+      {scores.warnings && scores.warnings.length > 0 && (
+        <Alert
+          severity="info"
+          sx={{ mb: 3 }}
+          action={
+            <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column' }}>
+              {scores.rice_score == null && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="medium"
+                  onClick={handleAnalyzeAndCalculate}
+                  disabled={calculating}
+                  sx={{
+                    fontWeight: 600,
+                    boxShadow: 2,
+                    minWidth: 120
+                  }}
+                >
+                  {calculating ? 'Calculating...' : 'Calculate'}
+                </Button>
+              )}
+              {scores.rice_score != null && scores.confidence < 80 && (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  size="medium"
+                  onClick={handleImproveConfidence}
+                  disabled={calculating}
+                  sx={{
+                    fontWeight: 600,
+                    minWidth: 180
+                  }}
+                >
+                  Improve Confidence
+                </Button>
+              )}
+            </Box>
+          }
+        >
+          <Typography variant="body2" fontWeight="600" gutterBottom>
+            Data Quality Notes:
+          </Typography>
+          {scores.warnings.map((warning, index) => (
+            <Typography key={index} variant="body2" sx={{ mt: 0.5 }}>
+              • {warning}
+            </Typography>
+          ))}
+        </Alert>
+      )}
+
       {/* Score Summary */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12}>
-          <Card elevation={3} sx={{ height: '100%' }}>
+          <Card elevation={3} sx={{ height: '100%', position: 'relative' }}>
             <CardContent>
               <Box sx={{ textAlign: 'center' }}>
                 <Typography variant="overline" color="text.secondary" gutterBottom>
@@ -181,6 +326,32 @@ export default function ScoresTab({ initiativeId }) {
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                   (Reach × Impact × Confidence) / Effort
                 </Typography>
+
+                {/* Show CTA button if score cannot be calculated */}
+                {scores.rice_score == null && (
+                  <Box sx={{ mt: 3 }}>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="large"
+                      startIcon={<HelpOutline />}
+                      onClick={handleAnalyzeAndCalculate}
+                      disabled={calculating}
+                      sx={{
+                        px: 4,
+                        py: 1.5,
+                        fontSize: '1rem',
+                        fontWeight: 600,
+                        boxShadow: 3
+                      }}
+                    >
+                      {calculating ? 'Calculating...' : 'Calculate Score'}
+                    </Button>
+                    <Typography variant="body2" display="block" color="text.secondary" sx={{ mt: 1.5 }}>
+                      Scores will be calculated with available data. Confidence will reflect data quality.
+                    </Typography>
+                  </Box>
+                )}
               </Box>
             </CardContent>
           </Card>
@@ -452,17 +623,51 @@ export default function ScoresTab({ initiativeId }) {
       </Box>
 
       {/* Calculation Modal */}
-      <Dialog open={calculating} maxWidth="sm" fullWidth>
+      <Dialog open={calculating && !gapDialogOpen} maxWidth="sm" fullWidth>
         <DialogContent sx={{ textAlign: 'center', py: 4 }}>
-          <CircularProgress size={60} sx={{ mb: 2 }} />
+          <CircularProgress
+            variant={progress > 0 ? "determinate" : "indeterminate"}
+            value={progress || 0}
+            size={60}
+            sx={{ mb: 2 }}
+          />
           <Typography variant="h6" gutterBottom>
-            Calculating Scores
+            {progressMessage || 'Calculating Scores'}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Analyzing initiative data and generating RICE & FDV scores...
-          </Typography>
+          {progress > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              {progress}% complete
+            </Typography>
+          )}
+          {!progress && (
+            <Typography variant="body2" color="text.secondary">
+              Please wait...
+            </Typography>
+          )}
         </DialogContent>
       </Dialog>
+
+      {/* Gap Analysis Dialog */}
+      {gapAnalysis && (
+        <ScoringGapDialog
+          open={gapDialogOpen}
+          onClose={handleGapDialogClose}
+          gapAnalysis={gapAnalysis}
+          initiativeId={initiativeId}
+        />
+      )}
+
+      {/* Success Notification */}
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={6000}
+        onClose={() => setSuccessMessage('')}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSuccessMessage('')} severity="success" sx={{ width: '100%' }}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

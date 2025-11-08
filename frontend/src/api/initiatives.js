@@ -106,4 +106,26 @@ export const initiativesApi = {
     const { data } = await apiClient.get(`/api/agents/initiatives/${id}/evaluate-readiness`);
     return data;
   },
+
+  // Recalculate quality score
+  recalculateQuality: async (id) => {
+    const { data } = await apiClient.post(`/api/agents/initiatives/${id}/recalculate-quality`);
+    return data;
+  },
+
+  // Analyze scoring gaps
+  analyzeScoringGaps: async (id) => {
+    const { data } = await apiClient.post(`/api/agents/initiatives/${id}/analyze-scoring-gaps`);
+    return data;
+  },
+
+  // Answer gap question with estimation
+  answerGapQuestion: async (id, questionId, answerText, estimationConfidence) => {
+    const { data } = await apiClient.post(`/api/agents/initiatives/${id}/answer-gap-question`, {
+      question_id: questionId,
+      answer_text: answerText,
+      estimation_confidence: estimationConfidence,
+    });
+    return data;
+  },
 };

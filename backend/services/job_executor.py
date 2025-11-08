@@ -18,6 +18,11 @@ from backend.repositories.mrd import MRDRepository
 from backend.agents.knowledge_gap import KnowledgeGapAgent
 from backend.agents.mrd_generator import MRDGeneratorAgent
 from backend.agents.readiness_evaluator import ReadinessEvaluatorAgent
+from backend.services.quality_scorer import calculate_quality_score
+from backend.services.job_executor_scoring import (
+    execute_analyze_scoring_gaps,
+    execute_calculate_scores
+)
 
 
 def execute_job_in_background(job_id: UUID) -> None:
@@ -63,6 +68,10 @@ def _execute_job(job_id: UUID) -> None:
             result = _execute_generate_mrd(db, job)
         elif job.job_type == JobType.EVALUATE_READINESS:
             result = _execute_evaluate_readiness(db, job)
+        elif job.job_type == JobType.ANALYZE_SCORING_GAPS:
+            result = execute_analyze_scoring_gaps(db, job)
+        elif job.job_type == JobType.CALCULATE_SCORES:
+            result = execute_calculate_scores(db, job)
         else:
             raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -242,6 +251,14 @@ def _execute_generate_mrd(db: Session, job: Job) -> dict:
         )
         mrd_repo.create(mrd)
 
+    # Recalculate quality score after MRD generation
+    # This ensures the quality score reflects the most recent work
+    initiative_repo = InitiativeRepository(db)
+    initiative = initiative_repo.get_by_id(job.initiative_id, job.organization_id)
+    if initiative:
+        quality_score, quality_breakdown = calculate_quality_score(db, job.initiative_id)
+        initiative.readiness_score = quality_score
+
     db.commit()
 
     return {
@@ -249,6 +266,7 @@ def _execute_generate_mrd(db: Session, job: Job) -> dict:
         "word_count": metadata["word_count"],
         "completeness_score": metadata["completeness_score"],
         "version": mrd.version,
+        "quality_score": quality_score if initiative else None,
         "initiative_id": str(job.initiative_id)
     }
 
@@ -301,14 +319,18 @@ def _execute_evaluate_readiness(db: Session, job: Job) -> dict:
         evaluated_by=job.created_by
     )
 
-    # Update initiative's readiness_score field for easy access in list views
-    initiative.readiness_score = evaluation_data["readiness_score"]
+    # Recalculate quality score based on Q&A coverage
+    # This provides a dynamic, up-to-date quality assessment
+    quality_score, quality_breakdown = calculate_quality_score(db, job.initiative_id)
+    initiative.readiness_score = quality_score
 
     db.commit()
 
     return {
         "evaluation_id": str(evaluation_record.id),
-        "readiness_score": evaluation_data["readiness_score"],
+        "evaluation_readiness": evaluation_data["readiness_score"],  # Original evaluation score
+        "quality_score": quality_score,  # Dynamic Q&A coverage score
+        "quality_breakdown": quality_breakdown,
         "risk_level": evaluation_data["risk_level"],
         "initiative_id": str(job.initiative_id)
     }

@@ -32,6 +32,8 @@ from backend.schemas.mrd import MRDResponse, MRDContentResponse
 from backend.services.pdf_generator import markdown_to_pdf
 from fastapi.responses import Response
 from backend.services.job_executor import execute_job_in_background
+from backend.services.quality_scorer import calculate_quality_score
+from backend.agents.scoring_gap_analyzer import ScoringGapAnalyzer
 
 
 router = APIRouter(prefix="/agents", tags=["AI Agents"])
@@ -519,6 +521,11 @@ def fine_tune_mrd_section(
     mrd.word_count = new_word_count
     mrd.version += 1
 
+    # Recalculate quality score after MRD fine-tuning
+    quality_score, quality_breakdown = calculate_quality_score(db, initiative_id)
+    initiative.readiness_score = quality_score
+    logger.info(f"Quality score recalculated to {quality_score}% after MRD fine-tuning")
+
     db.commit()
     db.refresh(mrd)
 
@@ -631,26 +638,28 @@ def delete_mrd(
     return None
 
 
-@router.post("/initiatives/{initiative_id}/calculate-scores", response_model=ScoreResponse)
+@router.post("/initiatives/{initiative_id}/calculate-scores")
 def calculate_scores(
     initiative_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Calculate RICE and FDV scores for an initiative.
+    Calculate RICE and FDV scores for an initiative (async with job).
 
     This endpoint:
-    1. Analyzes the initiative, Q&A, and MRD
-    2. Uses Claude to calculate RICE and FDV scores
-    3. Saves scores to the database (creates or updates)
+    1. Creates a background job for score calculation
+    2. Returns immediately with job ID for polling
+    3. Job runs score calculation asynchronously
 
     Requirements:
     - Initiative must have an MRD generated
     - Organizational context must exist
 
-    Returns the complete score data with reasoning.
+    Returns job ID for status polling.
     """
+    from backend.models import Job, JobStatus
+
     print(f"\n{'='*80}")
     print(f"[ENDPOINT CALLED] POST /api/agents/initiatives/{initiative_id}/calculate-scores")
     print(f"[ENDPOINT CALLED] User: {current_user.email} (ID: {current_user.id})")
@@ -676,97 +685,30 @@ def calculate_scores(
             detail="No organizational context found. Please create context first."
         )
 
-    # Calculate scores using agent
-    try:
-        agent = ScoringAgent(db)
-        print(f"[SCORING] Starting score calculation for initiative {initiative_id}")
-        rice_data, fdv_data, data_quality, warnings = agent.calculate_scores(
-            initiative=initiative,
-            context=context,
-            user_id=current_user.id
-        )
-        print(f"[SCORING] Score calculation completed successfully")
-        print(f"[SCORING] RICE data keys: {list(rice_data.keys())}")
-        print(f"[SCORING] FDV data keys: {list(fdv_data.keys())}")
-    except ValueError as e:
-        print(f"[SCORING ERROR] ValueError: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        print(f"[SCORING ERROR] Unexpected exception: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error during score calculation: {str(e)}"
-        )
+    # Create background job
+    job_repo = JobRepository(db)
+    job = Job(
+        job_type=JobType.CALCULATE_SCORES,
+        initiative_id=initiative_id,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        status=JobStatus.PENDING,
+        progress_percent=0,
+        progress_message="Starting score calculation..."
+    )
+    job_repo.create(job)
+    db.commit()
 
-    # Validate calculations (only if values are present - None indicates insufficient data)
-    print(f"[SCORING] Validating RICE score...")
-    # Skip validation if critical values are None (LLM indicated insufficient data)
-    if rice_data.get("reach") is not None and rice_data.get("rice_score") is not None:
-        rice_valid = agent.validate_rice_score(rice_data)
-        print(f"[SCORING] RICE validation result: {rice_valid}")
-        if not rice_valid:
-            print(f"[SCORING ERROR] RICE validation failed! Data: {rice_data}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="RICE score calculation validation failed"
-            )
-    else:
-        print(f"[SCORING] Skipping RICE validation - some values are None (insufficient data)")
+    print(f"[SCORING] Created job {job.id} for score calculation")
 
-    print(f"[SCORING] Validating FDV score...")
-    # Skip validation if critical values are None (LLM indicated insufficient data)
-    if (fdv_data.get("feasibility") is not None and
-        fdv_data.get("desirability") is not None and
-        fdv_data.get("viability") is not None and
-        fdv_data.get("fdv_score") is not None):
-        fdv_valid = agent.validate_fdv_score(fdv_data)
-        print(f"[SCORING] FDV validation result: {fdv_valid}")
-        if not fdv_valid:
-            print(f"[SCORING ERROR] FDV validation failed! Data: {fdv_data}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="FDV score calculation validation failed"
-            )
-    else:
-        print(f"[SCORING] Skipping FDV validation - some values are None (insufficient data)")
+    # Execute job in background
+    execute_job_in_background(job.id)
 
-    # Save scores to database
-    print(f"[SCORING] Saving scores to database...")
-    try:
-        score_repo = ScoreRepository(db)
-        score = score_repo.create_or_update(
-            initiative_id=initiative_id,
-            reach=rice_data["reach"],
-            impact=rice_data["impact"],
-            confidence=rice_data["confidence"],
-            effort=rice_data["effort"],
-            rice_score=rice_data["rice_score"],
-            rice_reasoning=rice_data["reasoning"],
-            feasibility=fdv_data["feasibility"],
-            desirability=fdv_data["desirability"],
-            viability=fdv_data["viability"],
-            fdv_score=fdv_data["fdv_score"],
-            fdv_reasoning=fdv_data["reasoning"],
-            scored_by=current_user.id,
-            data_quality=data_quality,
-            warnings=warnings
-        )
-        print(f"[SCORING] Score saved successfully, committing...")
-        db.commit()
-        print(f"[SCORING] Database commit successful")
-        return score
-    except Exception as e:
-        print(f"[SCORING ERROR] Database error: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
+    return {
+        "job_id": str(job.id),
+        "status": "pending",
+        "message": "Score calculation started in background"
+    }
 
 
 @router.get("/initiatives/{initiative_id}/scores", response_model=ScoreResponse)
@@ -920,3 +862,251 @@ def delete_scores(
     db.commit()
 
     return None
+
+
+@router.post("/initiatives/{initiative_id}/recalculate-quality")
+def recalculate_quality_score(
+    initiative_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Manually recalculate the quality score for an initiative.
+
+    This endpoint recalculates the quality score based on current Q&A coverage.
+    Useful after:
+    - Answering additional questions
+    - Updating question priorities
+    - Making significant changes to the initiative
+
+    The quality score measures how thoroughly the initiative has been researched
+    through Q&A, weighted by question priority (P0: 50%, P1: 30%, P2: 20%).
+
+    Returns:
+        Dict with updated quality_score and detailed breakdown
+    """
+    # Verify initiative access
+    initiative_repo = InitiativeRepository(db)
+    initiative = initiative_repo.get_by_id(initiative_id, current_user.organization_id)
+
+    if not initiative:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Initiative not found"
+        )
+
+    # Calculate quality score
+    quality_score, quality_breakdown = calculate_quality_score(db, initiative_id)
+
+    # Update initiative
+    initiative.readiness_score = quality_score
+    db.commit()
+
+    return {
+        "initiative_id": str(initiative_id),
+        "quality_score": quality_score,
+        "breakdown": quality_breakdown,
+        "message": "Quality score recalculated successfully"
+    }
+
+
+# Gap Analysis request models
+class AnswerGapQuestionRequest(BaseModel):
+    question_id: UUID = Field(..., description="ID of the question to answer")
+    answer_text: str = Field(..., description="Estimated answer provided by the user")
+    estimation_confidence: str = Field(..., description="Confidence level: Low, Medium, or High")
+
+
+@router.post("/initiatives/{initiative_id}/analyze-scoring-gaps")
+def analyze_scoring_gaps(
+    initiative_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Analyze scoring gaps for an initiative and generate targeted questions (async with job).
+
+    This endpoint:
+    1. Creates a background job for gap analysis
+    2. Returns immediately with job ID for polling
+    3. Job runs gap analysis asynchronously
+
+    Returns job ID for status polling.
+    """
+    from backend.models import Job, JobStatus
+
+    # Verify initiative access
+    initiative_repo = InitiativeRepository(db)
+    initiative = initiative_repo.get_by_id(initiative_id, current_user.organization_id)
+
+    if not initiative:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Initiative not found"
+        )
+
+    # Get context
+    context_repo = ContextRepository(db)
+    context = context_repo.get_current(current_user.organization_id)
+
+    if not context:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No organizational context found. Please create context first."
+        )
+
+    # Create background job
+    job_repo = JobRepository(db)
+    job = Job(
+        job_type=JobType.ANALYZE_SCORING_GAPS,
+        initiative_id=initiative_id,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        status=JobStatus.PENDING,
+        progress_percent=0,
+        progress_message="Starting gap analysis..."
+    )
+    job_repo.create(job)
+    db.commit()
+
+    print(f"[GAP ANALYSIS] Created job {job.id} for gap analysis")
+
+    # Execute job in background
+    execute_job_in_background(job.id)
+
+    return {
+        "job_id": str(job.id),
+        "status": "pending",
+        "message": "Gap analysis started in background"
+    }
+
+
+@router.post("/initiatives/{initiative_id}/answer-gap-question")
+def answer_gap_question(
+    initiative_id: UUID,
+    request: AnswerGapQuestionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Save an estimated answer to a gap-filling question.
+
+    This endpoint:
+    1. Validates the question belongs to the initiative
+    2. Creates or updates an Answer with status=ESTIMATED
+    3. Stores the estimation confidence level
+    4. Returns success response
+
+    The estimated answers will be used in score calculation with
+    confidence penalties applied based on the number of estimates.
+    """
+    # Verify initiative access
+    initiative_repo = InitiativeRepository(db)
+    initiative = initiative_repo.get_by_id(initiative_id, current_user.organization_id)
+
+    if not initiative:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Initiative not found"
+        )
+
+    # Validate confidence level
+    valid_confidence = ["Low", "Medium", "High"]
+    if request.estimation_confidence not in valid_confidence:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid confidence level. Must be one of: {', '.join(valid_confidence)}"
+        )
+
+    # Get the question and verify it belongs to this initiative
+    question_repo = QuestionRepository(db)
+    question = question_repo.get_by_id(request.question_id)
+
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found"
+        )
+
+    if question.initiative_id != initiative_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Question does not belong to this initiative"
+        )
+
+    # Create or update answer
+    from backend.repositories.answer import AnswerRepository
+    from backend.models.answer import AnswerStatus
+
+    answer_repo = AnswerRepository(db)
+    existing_answer = answer_repo.get_by_question(request.question_id)
+
+    if existing_answer:
+        # Update existing answer
+        existing_answer.answer_text = request.answer_text
+        existing_answer.answer_status = AnswerStatus.ESTIMATED
+        existing_answer.estimation_confidence = request.estimation_confidence
+        existing_answer.answered_by = current_user.id
+        answer = existing_answer
+    else:
+        # Create new answer
+        from backend.models.answer import Answer
+        answer = Answer(
+            question_id=request.question_id,
+            answer_text=request.answer_text,
+            answer_status=AnswerStatus.ESTIMATED,
+            estimation_confidence=request.estimation_confidence,
+            answered_by=current_user.id
+        )
+        answer_repo.create(answer)
+
+    db.commit()
+
+    return {
+        "success": True,
+        "question_id": str(request.question_id),
+        "answer_id": str(answer.id),
+        "status": "ESTIMATED",
+        "confidence": request.estimation_confidence,
+        "message": "Estimated answer saved successfully"
+    }
+
+
+@router.get("/jobs/{job_id}")
+def get_job_status(
+    job_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Poll job status and progress.
+
+    Returns:
+        Job status with progress information
+    """
+    job_repo = JobRepository(db)
+    job = job_repo.get_by_id(job_id)
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+
+    # Verify job belongs to user's organization
+    if job.organization_id != current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    return {
+        "job_id": str(job.id),
+        "status": job.status.value,
+        "progress_percent": job.progress_percent or 0,
+        "progress_message": job.progress_message or "",
+        "result_data": job.result_data if job.status.value == "completed" else None,
+        "error_message": job.error_message if job.status.value == "failed" else None,
+        "created_at": job.created_at.isoformat(),
+        "updated_at": job.updated_at.isoformat()
+    }

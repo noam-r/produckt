@@ -25,12 +25,14 @@ export function useJobPolling(jobId, options = {}) {
   const [job, setJob] = useState(null);
   const [isPolling, setIsPolling] = useState(false);
   const [error, setError] = useState(null);
+  const [animatedProgress, setAnimatedProgress] = useState(0);
 
   // Use refs to prevent multiple simultaneous polling loops
   const intervalIdRef = useRef(null);
   const timeoutIdRef = useRef(null);
   const isCancelledRef = useRef(false);
   const retryCountRef = useRef(0);
+  const animationIntervalRef = useRef(null);
 
   // Store callbacks in refs to avoid re-running effect when they change
   const onCompleteRef = useRef(onComplete);
@@ -52,6 +54,10 @@ export function useJobPolling(jobId, options = {}) {
       clearTimeout(timeoutIdRef.current);
       timeoutIdRef.current = null;
     }
+    if (animationIntervalRef.current) {
+      clearInterval(animationIntervalRef.current);
+      animationIntervalRef.current = null;
+    }
     setIsPolling(false);
   }, []);
 
@@ -71,7 +77,7 @@ export function useJobPolling(jobId, options = {}) {
       if (isCancelledRef.current) return;
 
       try {
-        const response = await apiClient.get(`/api/jobs/${jobId}`);
+        const response = await apiClient.get(`/api/agents/jobs/${jobId}`);
         const jobData = response.data;
 
         if (isCancelledRef.current) return;
@@ -81,8 +87,13 @@ export function useJobPolling(jobId, options = {}) {
 
         setJob(jobData);
 
+        // Update animated progress - only increase, never decrease
+        const actualProgress = jobData.progress_percent || 0;
+        setAnimatedProgress(prev => Math.max(prev, actualProgress));
+
         if (jobData.status === 'completed') {
           cancelPolling();
+          setAnimatedProgress(100);
           if (onCompleteRef.current) {
             onCompleteRef.current(jobData.result_data);
           }
@@ -140,10 +151,50 @@ export function useJobPolling(jobId, options = {}) {
     };
   }, [jobId, pollInterval, maxDuration, maxRetries]);
 
+  // Animate progress smoothly when actual progress hasn't changed
+  useEffect(() => {
+    if (!job || job.status === 'completed' || job.status === 'failed') {
+      if (animationIntervalRef.current) {
+        clearInterval(animationIntervalRef.current);
+        animationIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const actualProgress = job.progress_percent || 0;
+
+    // If we're stuck at the same progress for a while, animate slowly forward
+    if (animationIntervalRef.current) {
+      clearInterval(animationIntervalRef.current);
+    }
+
+    animationIntervalRef.current = setInterval(() => {
+      setAnimatedProgress(prev => {
+        const currentActual = job?.progress_percent || 0;
+
+        // If actual progress is ahead of animated progress, snap to it
+        if (currentActual > prev) {
+          return currentActual;
+        }
+
+        // Otherwise, slowly increment animated progress by 1% at a time
+        // This keeps the progress bar moving even when actual progress hasn't updated
+        const nextProgress = Math.min(prev + 1, 95); // Cap at 95% to avoid false 100%
+        return nextProgress;
+      });
+    }, 1000); // Update every 1 second (1% per second)
+
+    return () => {
+      if (animationIntervalRef.current) {
+        clearInterval(animationIntervalRef.current);
+      }
+    };
+  }, [job]);
+
   return {
     job,
     isPolling,
-    progress: job?.progress_percent,
+    progress: animatedProgress,
     progressMessage: job?.progress_message,
     error,
     cancelPolling

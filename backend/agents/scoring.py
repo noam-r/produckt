@@ -85,6 +85,12 @@ class ScoringAgent(BaseAgent):
             for q in questions
         ]
 
+        # Count estimated answers for confidence penalty
+        estimated_count = sum(
+            1 for q, a in questions_with_answers
+            if a and a.answer_status.value == "Estimated"
+        )
+
         # Build Q&A section
         qa_section = build_qa_section_for_mrd(questions_with_answers)
 
@@ -158,6 +164,41 @@ class ScoringAgent(BaseAgent):
         # Extract data quality and warnings (optional fields)
         data_quality = scores_data.get("data_quality", {})
         warnings = scores_data.get("warnings", [])
+
+        # Apply confidence penalty for estimated answers
+        if estimated_count > 0:
+            # Calculate penalty: min(30%, estimated_count * 10%)
+            confidence_penalty_percent = min(30, estimated_count * 10)
+
+            # Apply penalty to RICE confidence if it exists
+            if rice_data.get("confidence") is not None:
+                original_confidence = rice_data["confidence"]
+                adjusted_confidence = max(0, original_confidence - confidence_penalty_percent)
+                rice_data["confidence"] = adjusted_confidence
+
+                # Recalculate RICE score with adjusted confidence
+                if (rice_data.get("reach") is not None and
+                    rice_data.get("impact") is not None and
+                    rice_data.get("effort") is not None and
+                    rice_data["effort"] > 0):
+                    rice_data["rice_score"] = (
+                        rice_data["reach"] *
+                        rice_data["impact"] *
+                        (adjusted_confidence / 100)
+                    ) / rice_data["effort"]
+
+                # Add warning about estimation penalty
+                penalty_warning = (
+                    f"RICE Confidence reduced by {confidence_penalty_percent}% "
+                    f"(from {original_confidence}% to {adjusted_confidence}%) "
+                    f"due to {estimated_count} estimated answer(s). "
+                    f"Provide precise data to improve confidence."
+                )
+                warnings.append(penalty_warning)
+
+            # Add estimation metadata to data quality
+            data_quality["estimated_answers_count"] = estimated_count
+            data_quality["confidence_penalty_applied"] = f"-{confidence_penalty_percent}%"
 
         return rice_data, fdv_data, data_quality, warnings
 

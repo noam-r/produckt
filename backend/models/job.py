@@ -25,6 +25,8 @@ class JobType(str, enum.Enum):
     GENERATE_QUESTIONS = "generate_questions"
     GENERATE_MRD = "generate_mrd"
     EVALUATE_READINESS = "evaluate_readiness"
+    ANALYZE_SCORING_GAPS = "analyze_scoring_gaps"
+    CALCULATE_SCORES = "calculate_scores"
 
 
 class Job(Base):

@@ -422,6 +422,11 @@ def build_qa_section_for_mrd(questions_with_answers: list) -> str:
             if answer:
                 if answer.answer_status == AnswerStatus.ANSWERED:
                     lines.append(f"**A:** {answer.answer_text}")
+                elif answer.answer_status == AnswerStatus.ESTIMATED:
+                    # Mark estimated answers clearly for scoring agent
+                    confidence_label = answer.estimation_confidence or "Unknown"
+                    lines.append(f"**A:** {answer.answer_text}")
+                    lines.append(f"  - ⚠️ **ESTIMATED** (Confidence: {confidence_label}) - This is a rough estimate, not precise data")
                 elif answer.answer_status == AnswerStatus.UNKNOWN:
                     lines.append("**A:** *Unknown* - Information not currently available")
                     if answer.skip_reason:
@@ -546,7 +551,8 @@ Calculate the RICE score using: **(Reach × Impact × Confidence) / Effort**
 
 ### RICE Score
 - Calculate: (Reach × Impact × Confidence%) / Effort
-- If Reach is null/unknown: Set RICE score to null and add warning
+- **CRITICAL**: ALWAYS calculate a score, even with limited data. Use conservative estimates and lower confidence to reflect uncertainty.
+- If Reach is uncertain: Make a conservative estimate based on available data, set Confidence to 20-50%, and add warning explaining assumptions
 - Higher scores = higher priority
 
 ## FDV Framework

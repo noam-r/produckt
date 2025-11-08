@@ -24,6 +24,7 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  Tooltip,
 } from '@mui/material';
 import {
   ArrowBack,
@@ -36,9 +37,10 @@ import {
   Assessment,
   ArrowForward,
   HelpOutline,
+  Refresh,
 } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useInitiative, useDeleteInitiative, useGenerateQuestions } from '../hooks/useInitiatives';
 import { useQuestions } from '../hooks/useQuestions';
 import { initiativesApi } from '../api/initiatives';
@@ -83,6 +85,7 @@ function TabPanel({ children, value, index }) {
 export default function InitiativeDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [currentTab, setCurrentTab] = useState(0);
   const [anchorEl, setAnchorEl] = useState(null);
   const evaluationTabRef = useRef(null);
@@ -91,6 +94,15 @@ export default function InitiativeDetail() {
   const { data: questions } = useQuestions(id);
   const deleteInitiative = useDeleteInitiative();
   const generateQuestions = useGenerateQuestions();
+
+  // Recalculate quality score mutation
+  const recalculateQuality = useMutation({
+    mutationFn: () => initiativesApi.recalculateQuality(id),
+    onSuccess: () => {
+      // Invalidate and refetch initiative data
+      queryClient.invalidateQueries(['initiative', id]);
+    },
+  });
 
   // Fetch evaluation, MRD, and scores for progress tracking
   const { data: evaluation } = useQuery({
@@ -163,7 +175,7 @@ export default function InitiativeDetail() {
 
   // Calculate workflow progress
   const getWorkflowProgress = () => {
-    if (!initiative) return { activeStep: 0, readinessScore: 0 };
+    if (!initiative) return { activeStep: 0, qualityScore: 0, workflowCompletion: 0 };
 
     const hasQuestions = questions && questions.length > 0;
     const answeredCount = questions?.filter((q) => q.answer?.answer_status === 'Answered').length || 0;
@@ -183,26 +195,30 @@ export default function InitiativeDetail() {
     if (hasMRD) activeStep = 4;
     if (hasScores) activeStep = 5;
 
-    // Use initiative.readiness_score as single source of truth
-    // This is set by the evaluation agent and provides consistent readiness across the app
-    let readinessScore = initiative.readiness_score || 0;
+    // Calculate workflow completion based on key milestones (4 steps total)
+    const workflowStepsComplete = [hasQuestions, hasEvaluation, hasMRD, hasScores].filter(Boolean).length;
+    const workflowCompletion = Math.round((workflowStepsComplete / 4) * 100);
 
-    // If no evaluation has run yet, calculate a basic progress score
-    if (!initiative.readiness_score) {
-      const descriptionQuality = initiative.description?.length > 100 ? 20 : 10;
-      const questionsGenerated = hasQuestions ? 20 : 0;
-      const questionsAnswered = totalQuestions > 0 ? (completedCount / totalQuestions) * 40 : 0;
-      const mrdGenerated = hasMRD ? 10 : 0;
-      const scored = hasScores ? 10 : 0;
-      readinessScore = Math.round(
-        descriptionQuality + questionsGenerated + questionsAnswered + mrdGenerated + scored
-      );
-    }
+    // Q&A Coverage score - measures how many questions have been answered
+    // This is calculated dynamically based on current Q&A state (not a snapshot)
+    const qaCoverageScore = initiative.readiness_score || 0;
 
-    return { activeStep, readinessScore, hasQuestions, allAnswered, completedCount, totalQuestions, hasEvaluation, hasMRD, hasScores };
+    return {
+      activeStep,
+      qaCoverageScore,
+      workflowCompletion,
+      workflowStepsComplete,
+      hasQuestions,
+      allAnswered,
+      completedCount,
+      totalQuestions,
+      hasEvaluation,
+      hasMRD,
+      hasScores
+    };
   };
 
-  const { activeStep, readinessScore, hasQuestions, allAnswered, completedCount, totalQuestions, hasEvaluation, hasMRD, hasScores } =
+  const { activeStep, qaCoverageScore, workflowCompletion, workflowStepsComplete, hasQuestions, allAnswered, completedCount, totalQuestions, hasEvaluation, hasMRD, hasScores } =
     getWorkflowProgress();
 
   // Determine next action
@@ -330,19 +346,51 @@ export default function InitiativeDetail() {
         {/* Progress Indicator */}
         <Card elevation={2} sx={{ mb: 3 }}>
           <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h6" fontWeight="600">
-                Initiative Progress
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Readiness Score
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+              <Box>
+                <Typography variant="h6" fontWeight="600" gutterBottom>
+                  Initiative Progress
                 </Typography>
-                <Chip
-                  label={`${readinessScore}%`}
-                  color={readinessScore >= 80 ? 'success' : readinessScore >= 50 ? 'warning' : 'error'}
-                  sx={{ fontWeight: 600 }}
-                />
+                <Typography variant="body2" color="text.secondary">
+                  {workflowStepsComplete} of 4 workflow steps complete
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'flex-end' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Workflow
+                  </Typography>
+                  <Chip
+                    label={`${workflowCompletion}%`}
+                    color={workflowCompletion === 100 ? 'success' : workflowCompletion >= 75 ? 'primary' : workflowCompletion >= 50 ? 'warning' : 'default'}
+                    size="small"
+                    sx={{ fontWeight: 600, minWidth: 60 }}
+                  />
+                </Box>
+                {qaCoverageScore > 0 && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Tooltip title="Percentage of P0/P1/P2 questions answered (weighted: P0=50%, P1=30%, P2=20%). This reflects your current Q&A progress and updates dynamically as you answer questions.">
+                      <Typography variant="body2" color="text.secondary" sx={{ cursor: 'help', textDecoration: 'underline dotted' }}>
+                        Q&A Coverage
+                      </Typography>
+                    </Tooltip>
+                    <Chip
+                      label={`${qaCoverageScore}%`}
+                      color={qaCoverageScore >= 80 ? 'success' : qaCoverageScore >= 50 ? 'warning' : 'error'}
+                      size="small"
+                      sx={{ fontWeight: 600, minWidth: 60 }}
+                    />
+                    <Tooltip title="Recalculate Q&A coverage score based on current answers">
+                      <IconButton
+                        size="small"
+                        onClick={() => recalculateQuality.mutate()}
+                        disabled={recalculateQuality.isPending}
+                      >
+                        <Refresh fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                )}
               </Box>
             </Box>
 
@@ -354,11 +402,22 @@ export default function InitiativeDetail() {
               ))}
             </Stepper>
 
-            <Box sx={{ mt: 2 }}>
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                Workflow Progress
+              </Typography>
               <LinearProgress
                 variant="determinate"
-                value={readinessScore}
-                sx={{ height: 8, borderRadius: 4 }}
+                value={workflowCompletion}
+                sx={{
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: 'action.hover',
+                  '& .MuiLinearProgress-bar': {
+                    borderRadius: 4,
+                    backgroundColor: workflowCompletion === 100 ? 'success.main' : 'primary.main'
+                  }
+                }}
               />
             </Box>
           </CardContent>
