@@ -2,10 +2,11 @@
 Admin endpoints for user management and system configuration.
 """
 
-from typing import List
+from typing import List, Optional
 from uuid import UUID
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -14,6 +15,7 @@ from backend.models.user import User
 from backend.repositories.user_repository import UserRepository
 from backend.repositories.role_repository import RoleRepository
 from backend.repositories.user_role_repository import UserRoleRepository
+from backend.repositories.analytics import AnalyticsRepository
 from backend.services.audit_logger import AuditLogger
 from backend.schemas.admin import (
     UserResponse,
@@ -389,3 +391,150 @@ def delete_user(
     )
 
     return None
+
+
+# Analytics endpoints
+@router.get("/analytics/overview")
+def get_analytics_overview(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    days: int = Query(30, description="Number of days to look back")
+):
+    """
+    Get overall LLM usage analytics overview.
+
+    Returns total statistics for the last N days.
+    """
+    analytics_repo = AnalyticsRepository(db)
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    total_stats = analytics_repo.get_total_stats(
+        organization_id=current_user.organization_id,
+        start_date=start_date
+    )
+
+    error_stats = analytics_repo.get_error_stats(
+        organization_id=current_user.organization_id,
+        start_date=start_date
+    )
+
+    return {
+        "period_days": days,
+        "start_date": start_date.isoformat(),
+        "end_date": datetime.utcnow().isoformat(),
+        "total_stats": total_stats,
+        "error_stats": error_stats
+    }
+
+
+@router.get("/analytics/by-user")
+def get_analytics_by_user(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    days: int = Query(30, description="Number of days to look back"),
+    limit: int = Query(50, description="Maximum number of users to return")
+):
+    """
+    Get LLM usage analytics broken down by user.
+
+    Returns usage and cost for each user, ordered by total cost descending.
+    """
+    analytics_repo = AnalyticsRepository(db)
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    user_stats = analytics_repo.get_usage_by_user(
+        organization_id=current_user.organization_id,
+        start_date=start_date,
+        limit=limit
+    )
+
+    return {
+        "period_days": days,
+        "start_date": start_date.isoformat(),
+        "end_date": datetime.utcnow().isoformat(),
+        "users": user_stats
+    }
+
+
+@router.get("/analytics/by-agent")
+def get_analytics_by_agent(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    days: int = Query(30, description="Number of days to look back")
+):
+    """
+    Get LLM usage analytics broken down by agent/action type.
+
+    Returns usage and cost for each agent, ordered by total cost descending.
+    """
+    analytics_repo = AnalyticsRepository(db)
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    agent_stats = analytics_repo.get_usage_by_agent(
+        organization_id=current_user.organization_id,
+        start_date=start_date
+    )
+
+    return {
+        "period_days": days,
+        "start_date": start_date.isoformat(),
+        "end_date": datetime.utcnow().isoformat(),
+        "agents": agent_stats
+    }
+
+
+@router.get("/analytics/by-model")
+def get_analytics_by_model(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    days: int = Query(30, description="Number of days to look back")
+):
+    """
+    Get LLM usage analytics broken down by model.
+
+    Returns usage and cost for each model, ordered by total cost descending.
+    """
+    analytics_repo = AnalyticsRepository(db)
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    model_stats = analytics_repo.get_usage_by_model(
+        organization_id=current_user.organization_id,
+        start_date=start_date
+    )
+
+    return {
+        "period_days": days,
+        "start_date": start_date.isoformat(),
+        "end_date": datetime.utcnow().isoformat(),
+        "models": model_stats
+    }
+
+
+@router.get("/analytics/over-time")
+def get_analytics_over_time(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    days: int = Query(30, description="Number of days to look back"),
+    granularity: str = Query("day", description="Time bucket size: hour, day, week, month")
+):
+    """
+    Get LLM usage analytics over time for trend visualization.
+
+    Returns time-series data with call counts and costs.
+    """
+    analytics_repo = AnalyticsRepository(db)
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    time_series = analytics_repo.get_usage_over_time(
+        organization_id=current_user.organization_id,
+        start_date=start_date,
+        granularity=granularity
+    )
+
+    return {
+        "period_days": days,
+        "start_date": start_date.isoformat(),
+        "end_date": datetime.utcnow().isoformat(),
+        "granularity": granularity,
+        "data": time_series
+    }

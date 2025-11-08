@@ -12,6 +12,7 @@ import InitiativeDetail from './pages/InitiativeDetail';
 import InitiativeForm from './pages/InitiativeForm';
 import ContextManagement from './pages/ContextManagement';
 import UsersManagement from './pages/UsersManagement';
+import Analytics from './pages/Analytics';
 
 function App() {
   return (
@@ -82,6 +83,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <UsersManagement />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/analytics"
+                element={
+                  <ProtectedRoute>
+                    <Analytics />
                   </ProtectedRoute>
                 }
               />

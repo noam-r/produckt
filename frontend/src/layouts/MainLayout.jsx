@@ -30,6 +30,7 @@ import {
   Logout,
   People as PeopleIcon,
   AdminPanelSettings as AdminIcon,
+  BarChart as AnalyticsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -44,6 +45,7 @@ const menuItems = [
 
 const adminMenuItems = [
   { text: 'Users', icon: <PeopleIcon />, path: '/admin/users' },
+  { text: 'Analytics', icon: <AnalyticsIcon />, path: '/admin/analytics' },
   { text: 'Context', icon: <SettingsIcon />, path: '/context' },
 ];
 
