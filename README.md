@@ -86,10 +86,16 @@ python scripts/init_db.py
 ```
 
 **Important**: The `init_db.py` script creates:
-- Default RBAC roles (admin, product, technical, bizdev, viewer)
+- Default RBAC roles aligned with question categories:
+  - `admin` - Full system access, can manage users and contexts
+  - `business_dev` - Can answer Business_Dev category questions
+  - `technical` - Can answer Technical category questions
+  - `product` - Can answer Product category questions
+  - `operations` - Can answer Operations category questions
+  - `financial` - Can answer Financial category questions
 - A default admin user with credentials:
   - Email: `admin@produckt.local`
-  - Password: `Admin123!`
+  - Password: `Admin123!` (you will be required to change this on first login)
 - Proper role assignments so admin features work correctly
 
 ⚠️ Change the admin password after first login!

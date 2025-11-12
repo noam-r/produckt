@@ -61,13 +61,9 @@ def validate_password_complexity(password: str) -> Tuple[bool, List[str]]:
     if password.lower() in weak_passwords:
         errors.append("This password is too common and easy to guess")
 
-    # Sequential characters check
-    if re.search(r'(012|123|234|345|456|567|678|789|890|abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)', password.lower()):
-        errors.append("Password should not contain sequential characters")
-
-    # Repeated characters check
-    if re.search(r'(.)\1{2,}', password):
-        errors.append("Password should not contain more than 2 repeated characters")
+    # Repeated characters check (more than 3 in a row)
+    if re.search(r'(.)\1{3,}', password):
+        errors.append("Password should not contain more than 3 identical characters in a row")
 
     return (len(errors) == 0, errors)
 

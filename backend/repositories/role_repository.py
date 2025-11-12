@@ -64,9 +64,11 @@ class RoleRepository:
         """Ensure default roles exist in the database."""
         default_roles = [
             ("admin", "Full system access, can manage users and contexts"),
-            ("product", "Product management role for MRD generation"),
-            ("technical", "Technical role for feasibility assessment"),
-            ("bizdev", "Business development role for market analysis"),
+            ("business_dev", "Business Development - can answer Business_Dev category questions"),
+            ("technical", "Technical - can answer Technical category questions"),
+            ("product", "Product - can answer Product category questions"),
+            ("operations", "Operations - can answer Operations category questions"),
+            ("financial", "Financial - can answer Financial category questions"),
         ]
 
         for name, description in default_roles:

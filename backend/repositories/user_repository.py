@@ -86,7 +86,8 @@ class UserRepository:
         organization_id: UUID,
         email: Optional[str] = None,
         name: Optional[str] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        force_password_change: Optional[bool] = None
     ) -> Optional[User]:
         """
         Update user details.
@@ -97,6 +98,7 @@ class UserRepository:
             email: New email (optional)
             name: New name (optional)
             is_active: New active status (optional)
+            force_password_change: Force password change flag (optional)
 
         Returns:
             The updated user or None if not found
@@ -111,6 +113,8 @@ class UserRepository:
             user.name = name
         if is_active is not None:
             user.is_active = is_active
+        if force_password_change is not None:
+            user.force_password_change = force_password_change
 
         self.db.commit()
         self.db.refresh(user)

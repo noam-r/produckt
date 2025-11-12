@@ -39,6 +39,7 @@ class UserResponse(BaseModel):
     email: EmailStr
     name: str
     is_active: bool
+    force_password_change: bool = False
     roles: List[UserRoleInfo] = []
     created_at: datetime
     updated_at: datetime
@@ -84,6 +85,7 @@ class UpdateUserRequest(BaseModel):
     email: Optional[EmailStr] = None
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     is_active: Optional[bool] = None
+    force_password_change: Optional[bool] = None
     role_ids: Optional[List[UUID]] = None
 
 

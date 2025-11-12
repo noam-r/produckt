@@ -33,19 +33,31 @@ export default function ChangePasswordDialog({ open, onClose, forceChange = fals
   // Password validation rules
   const validationRules = [
     { label: 'At least 8 characters long', test: (pwd) => pwd.length >= 8 },
-    { label: 'Contains uppercase letter', test: (pwd) => /[A-Z]/.test(pwd) },
-    { label: 'Contains lowercase letter', test: (pwd) => /[a-z]/.test(pwd) },
-    { label: 'Contains digit', test: (pwd) => /\d/.test(pwd) },
-    { label: 'Contains special character', test: (pwd) => /[!@#$%^&*(),.?":{}|<>]/.test(pwd) },
+    { label: 'Contains uppercase letter (A-Z)', test: (pwd) => /[A-Z]/.test(pwd) },
+    { label: 'Contains lowercase letter (a-z)', test: (pwd) => /[a-z]/.test(pwd) },
+    { label: 'Contains digit (0-9)', test: (pwd) => /\d/.test(pwd) },
+    { label: 'Contains special character (!@#$%^&*(),.?":{}|<>)', test: (pwd) => /[!@#$%^&*(),.?":{}|<>]/.test(pwd) },
+    { label: 'No more than 3 identical characters in a row (e.g., aaaa)', test: (pwd) => !/(.)\1{3,}/.test(pwd) },
+    { label: 'Not a common password (e.g., password123, admin)', test: (pwd) => {
+      const weak = ['password', 'password123', '12345678', 'qwerty', 'abc123', 'password1', '123456789', 'admin123', 'letmein', 'welcome', '1234', '1111', '0000', 'admin', 'root', 'test'];
+      return !weak.includes(pwd.toLowerCase());
+    }},
+    { label: 'Different from current password', test: (pwd, curr) => pwd !== curr, needsCurrent: true },
   ];
 
   const getPasswordStrength = (pwd) => {
-    const passedRules = validationRules.filter((rule) => rule.test(pwd)).length;
+    const passedRules = validationRules.filter((rule) => {
+      if (rule.needsCurrent) return true; // Don't count this in strength
+      return rule.test(pwd);
+    }).length;
     return passedRules;
   };
 
-  const isPasswordValid = (pwd) => {
-    return validationRules.every((rule) => rule.test(pwd));
+  const isPasswordValid = (pwd, curr = '') => {
+    return validationRules.every((rule) => {
+      if (rule.needsCurrent) return rule.test(pwd, curr);
+      return rule.test(pwd);
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -64,13 +76,8 @@ export default function ChangePasswordDialog({ open, onClose, forceChange = fals
       return;
     }
 
-    if (!isPasswordValid(newPassword)) {
+    if (!isPasswordValid(newPassword, currentPassword)) {
       setError('New password does not meet complexity requirements');
-      return;
-    }
-
-    if (currentPassword === newPassword) {
-      setError('New password must be different from current password');
       return;
     }
 
@@ -214,36 +221,38 @@ export default function ChangePasswordDialog({ open, onClose, forceChange = fals
             }}
           />
 
-          {newPassword && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Password Requirements:
-              </Typography>
-              <List dense>
-                {validationRules.map((rule, idx) => {
-                  const passed = rule.test(newPassword);
-                  return (
-                    <ListItem key={idx} sx={{ py: 0 }}>
-                      <ListItemIcon sx={{ minWidth: 36 }}>
-                        {passed ? (
-                          <CheckCircle color="success" fontSize="small" />
-                        ) : (
-                          <Cancel color="error" fontSize="small" />
-                        )}
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={rule.label}
-                        primaryTypographyProps={{
-                          variant: 'body2',
-                          color: passed ? 'success.main' : 'text.secondary',
-                        }}
-                      />
-                    </ListItem>
-                  );
-                })}
-              </List>
-            </Box>
-          )}
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Password Requirements:
+            </Typography>
+            <List dense>
+              {validationRules.map((rule, idx) => {
+                const passed = rule.needsCurrent
+                  ? rule.test(newPassword, currentPassword)
+                  : rule.test(newPassword);
+                // Only show green check if password is not empty and rule passes
+                const showPassed = newPassword && passed;
+                return (
+                  <ListItem key={idx} sx={{ py: 0 }}>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      {showPassed ? (
+                        <CheckCircle color="success" fontSize="small" />
+                      ) : (
+                        <Cancel color="error" fontSize="small" />
+                      )}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={rule.label}
+                      primaryTypographyProps={{
+                        variant: 'body2',
+                        color: showPassed ? 'success.main' : 'text.secondary',
+                      }}
+                    />
+                  </ListItem>
+                );
+              })}
+            </List>
+          </Box>
         </Box>
       </DialogContent>
       <DialogActions>
@@ -255,7 +264,7 @@ export default function ChangePasswordDialog({ open, onClose, forceChange = fals
         <Button
           onClick={handleSubmit}
           variant="contained"
-          disabled={loading || success || !isPasswordValid(newPassword) || newPassword !== confirmPassword}
+          disabled={loading || success || !isPasswordValid(newPassword, currentPassword) || newPassword !== confirmPassword}
         >
           {loading ? 'Changing...' : 'Change Password'}
         </Button>

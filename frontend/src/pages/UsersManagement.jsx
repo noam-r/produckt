@@ -62,6 +62,7 @@ export default function UsersManagement() {
     generate_password: false,
     role_ids: [],
     is_active: true,
+    force_password_change: false,
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -174,6 +175,7 @@ export default function UsersManagement() {
       generate_password: false,
       role_ids: [],
       is_active: true,
+      force_password_change: false,
     });
     setOpenDialog(true);
   };
@@ -185,6 +187,7 @@ export default function UsersManagement() {
       name: user.name,
       role_ids: user.roles.map(r => r.id),
       is_active: user.is_active,
+      force_password_change: user.force_password_change || false,
     });
     setOpenDialog(true);
   };
@@ -228,6 +231,7 @@ export default function UsersManagement() {
           name: formData.name,
           role_ids: formData.role_ids,
           is_active: formData.is_active,
+          force_password_change: formData.force_password_change,
         },
       });
     } else {
@@ -442,6 +446,18 @@ export default function UsersManagement() {
               }
               label="Active"
             />
+
+            {editingUser && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.force_password_change}
+                    onChange={(e) => setFormData({ ...formData, force_password_change: e.target.checked })}
+                  />
+                }
+                label="Force Password Change on Next Login"
+              />
+            )}
             </Box>
           </DialogContent>
           <DialogActions>

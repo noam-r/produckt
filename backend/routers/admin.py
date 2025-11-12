@@ -232,13 +232,17 @@ def update_user(
     if request.is_active is not None and request.is_active != user.is_active:
         changes["is_active"] = {"old": user.is_active, "new": request.is_active}
 
+    if request.force_password_change is not None and request.force_password_change != user.force_password_change:
+        changes["force_password_change"] = {"old": user.force_password_change, "new": request.force_password_change}
+
     # Update user
     updated_user = user_repo.update(
         user_id=user_id,
         organization_id=current_user.organization_id,
         email=request.email,
         name=request.name,
-        is_active=request.is_active
+        is_active=request.is_active,
+        force_password_change=request.force_password_change
     )
 
     # Update roles if provided
