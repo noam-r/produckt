@@ -515,128 +515,124 @@ export default function ScoresTab({ initiativeId }) {
             FDV evaluates feasibility, desirability, and viability on a scale of 1-10
           </Typography>
 
-          <Grid container spacing={3}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
             {/* Left side: Numeric breakdown */}
-            <Grid item xs={12} md={6}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: '100%', justifyContent: 'center' }}>
-                <Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Feasibility
-                    </Typography>
-                    <Typography variant="h5" fontWeight="600">
-                      {scores.feasibility}/10
-                    </Typography>
-                  </Box>
-                  <LinearProgress
-                    variant="determinate"
-                    value={(scores.feasibility / 10) * 100}
-                    sx={{ height: 8, borderRadius: 4, mb: 1 }}
-                    color="primary"
-                  />
-                  <Typography variant="caption" color="text.secondary">
-                    Can we build it?
+            <Box sx={{ flex: '1 1 50%', display: 'flex', flexDirection: 'column', gap: 3, justifyContent: 'center' }}>
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="body1" fontWeight="500" color="text.secondary">
+                    Feasibility
+                  </Typography>
+                  <Typography variant="h4" fontWeight="600">
+                    {scores.feasibility}/10
                   </Typography>
                 </Box>
-
-                <Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Desirability
-                    </Typography>
-                    <Typography variant="h5" fontWeight="600">
-                      {scores.desirability}/10
-                    </Typography>
-                  </Box>
-                  <LinearProgress
-                    variant="determinate"
-                    value={(scores.desirability / 10) * 100}
-                    sx={{ height: 8, borderRadius: 4, mb: 1 }}
-                    color="secondary"
-                  />
-                  <Typography variant="caption" color="text.secondary">
-                    Do users want it?
-                  </Typography>
-                </Box>
-
-                <Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Viability
-                    </Typography>
-                    <Typography variant="h5" fontWeight="600">
-                      {scores.viability}/10
-                    </Typography>
-                  </Box>
-                  <LinearProgress
-                    variant="determinate"
-                    value={(scores.viability / 10) * 100}
-                    sx={{ height: 8, borderRadius: 4, mb: 1 }}
-                    color="success"
-                  />
-                  <Typography variant="caption" color="text.secondary">
-                    Is it sustainable?
-                  </Typography>
-                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={(scores.feasibility / 10) * 100}
+                  sx={{ height: 10, borderRadius: 5, mb: 1 }}
+                  color="primary"
+                />
+                <Typography variant="body2" color="text.secondary">
+                  Can we build it?
+                </Typography>
               </Box>
-            </Grid>
+
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="body1" fontWeight="500" color="text.secondary">
+                    Desirability
+                  </Typography>
+                  <Typography variant="h4" fontWeight="600">
+                    {scores.desirability}/10
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={(scores.desirability / 10) * 100}
+                  sx={{ height: 10, borderRadius: 5, mb: 1 }}
+                  color="secondary"
+                />
+                <Typography variant="body2" color="text.secondary">
+                  Do users want it?
+                </Typography>
+              </Box>
+
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="body1" fontWeight="500" color="text.secondary">
+                    Viability
+                  </Typography>
+                  <Typography variant="h4" fontWeight="600">
+                    {scores.viability}/10
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={(scores.viability / 10) * 100}
+                  sx={{ height: 10, borderRadius: 5, mb: 1 }}
+                  color="success"
+                />
+                <Typography variant="body2" color="text.secondary">
+                  Is it sustainable?
+                </Typography>
+              </Box>
+            </Box>
 
             {/* Right side: Radar chart */}
-            <Grid item xs={12} md={6}>
-              <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <Typography variant="subtitle2" fontWeight="600" gutterBottom sx={{ textAlign: 'center' }}>
-                  FDV Visual Profile
-                </Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                  <RadarChart
-                    data={[
-                      { dimension: 'Feasibility', value: scores.feasibility || 0, fullMark: 10 },
-                      { dimension: 'Desirability', value: scores.desirability || 0, fullMark: 10 },
-                      { dimension: 'Viability', value: scores.viability || 0, fullMark: 10 },
-                    ]}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius="70%"
-                  >
-                    <PolarGrid stroke="#e0e0e0" />
-                    <PolarAngleAxis
-                      dataKey="dimension"
-                      tick={{ fill: '#666', fontSize: 14, fontWeight: 500 }}
-                    />
-                    <PolarRadiusAxis
-                      angle={90}
-                      domain={[0, 10]}
-                      tick={{ fill: '#999', fontSize: 12 }}
-                      tickCount={6}
-                    />
-                    <Radar
-                      name="FDV Score"
-                      dataKey="value"
-                      stroke="#1976d2"
-                      fill="#1976d2"
-                      fillOpacity={0.5}
-                      strokeWidth={2}
-                    />
-                    <Tooltip
-                      formatter={(value) => [`${value}/10`, 'Score']}
-                      contentStyle={{
-                        backgroundColor: '#fff',
-                        border: '1px solid #ddd',
-                        borderRadius: 4,
-                      }}
-                    />
-                    <Legend
-                      wrapperStyle={{ paddingTop: 20 }}
-                      iconType="circle"
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
-                  A balanced triangle indicates a well-rounded initiative. Skewed shapes reveal areas needing attention.
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
+            <Box sx={{ flex: '1 1 50%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <Typography variant="subtitle2" fontWeight="600" gutterBottom sx={{ textAlign: 'center' }}>
+                FDV Visual Profile
+              </Typography>
+              <ResponsiveContainer width="100%" height={300}>
+                <RadarChart
+                  data={[
+                    { dimension: 'Feasibility', value: scores.feasibility || 0, fullMark: 10 },
+                    { dimension: 'Desirability', value: scores.desirability || 0, fullMark: 10 },
+                    { dimension: 'Viability', value: scores.viability || 0, fullMark: 10 },
+                  ]}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius="70%"
+                >
+                  <PolarGrid stroke="#e0e0e0" />
+                  <PolarAngleAxis
+                    dataKey="dimension"
+                    tick={{ fill: '#666', fontSize: 14, fontWeight: 500 }}
+                  />
+                  <PolarRadiusAxis
+                    angle={90}
+                    domain={[0, 10]}
+                    tick={{ fill: '#999', fontSize: 12 }}
+                    tickCount={6}
+                  />
+                  <Radar
+                    name="FDV Score"
+                    dataKey="value"
+                    stroke="#1976d2"
+                    fill="#1976d2"
+                    fillOpacity={0.5}
+                    strokeWidth={2}
+                  />
+                  <Tooltip
+                    formatter={(value) => [`${value}/10`, 'Score']}
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #ddd',
+                      borderRadius: 4,
+                    }}
+                  />
+                  <Legend
+                    wrapperStyle={{ paddingTop: 20 }}
+                    iconType="circle"
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
+                A balanced triangle indicates a well-rounded initiative. Skewed shapes reveal areas needing attention.
+              </Typography>
+            </Box>
+          </Box>
 
           <Divider sx={{ my: 3 }} />
 

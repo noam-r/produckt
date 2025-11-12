@@ -259,6 +259,10 @@ def _execute_generate_mrd(db: Session, job: Job) -> dict:
         quality_score, quality_breakdown = calculate_quality_score(db, job.initiative_id)
         initiative.readiness_score = quality_score
 
+        # Update initiative status to MRD_Generated
+        from backend.models.initiative import InitiativeStatus
+        initiative.status = InitiativeStatus.MRD_GENERATED
+
     db.commit()
 
     return {

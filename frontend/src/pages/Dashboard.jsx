@@ -19,17 +19,19 @@ import {
   Add,
   ArrowForward,
 } from '@mui/icons-material';
+import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../context/AuthContext';
 import { useInitiatives } from '../hooks/useInitiatives';
 import MainLayout from '../layouts/MainLayout';
 
 // Status color mapping
 const statusColors = {
-  DRAFT: 'default',
-  IN_DISCOVERY: 'info',
-  IN_QA: 'warning',
-  READY_FOR_MRD: 'secondary',
-  COMPLETED: 'success',
+  Draft: 'default',
+  In_QA: 'warning',
+  Ready: 'info',
+  MRD_Generated: 'secondary',
+  Scored: 'success',
+  Archived: 'default',
 };
 
 export default function Dashboard() {
@@ -40,10 +42,10 @@ export default function Dashboard() {
   // Calculate metrics
   const totalInitiatives = initiatives?.length || 0;
   const inProgress = initiatives?.filter(
-    (i) => i.status === 'IN_DISCOVERY' || i.status === 'IN_QA'
+    (i) => i.status === 'In_QA' || i.status === 'Ready'
   ).length || 0;
-  const completed = initiatives?.filter((i) => i.status === 'COMPLETED').length || 0;
-  const draft = initiatives?.filter((i) => i.status === 'DRAFT').length || 0;
+  const completed = initiatives?.filter((i) => i.status === 'Scored' || i.status === 'MRD_Generated').length || 0;
+  const draft = initiatives?.filter((i) => i.status === 'Draft').length || 0;
 
   // Get recent initiatives (last 5)
   const recentInitiatives = initiatives?.slice(0, 5) || [];
@@ -240,19 +242,27 @@ export default function Dashboard() {
                           <Typography variant="h6" fontWeight="600" gutterBottom>
                             {initiative.title}
                           </Typography>
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
+                          <Box
                             sx={{
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               display: '-webkit-box',
                               WebkitLineClamp: 2,
                               WebkitBoxOrient: 'vertical',
+                              '& p': {
+                                margin: 0,
+                                fontSize: '0.875rem',
+                                color: 'text.secondary',
+                              },
+                              '& strong': {
+                                fontWeight: 600,
+                              },
                             }}
                           >
-                            {initiative.description || 'No description'}
-                          </Typography>
+                            <ReactMarkdown>
+                              {initiative.description || 'No description'}
+                            </ReactMarkdown>
+                          </Box>
                         </Box>
                         <Chip
                           label={initiative.status.replace('_', ' ')}

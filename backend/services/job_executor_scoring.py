@@ -167,6 +167,10 @@ def execute_calculate_scores(db: Session, job: Job) -> dict:
         )
         score_repo.create(score)
 
+    # Update initiative status to Scored
+    from backend.models.initiative import InitiativeStatus
+    initiative.status = InitiativeStatus.SCORED
+
     job_repo.update_status(job, JobStatus.IN_PROGRESS, "Finalizing...", 90)
     db.commit()
 
