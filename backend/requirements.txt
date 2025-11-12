@@ -27,3 +27,8 @@ httpx==0.25.2
 
 # Optional: PostgreSQL support (if you want to use PostgreSQL instead of SQLite)
 # psycopg2-binary==2.9.9
+
+# PDF Generation
+weasyprint==61.2
+pydyf==0.10.0  # Pin compatible version for weasyprint 61.2
+markdown==3.5.2

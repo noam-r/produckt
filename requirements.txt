@@ -33,3 +33,8 @@ httpx==0.26.0
 
 # Utilities
 jinja2==3.1.3
+
+# PDF Generation
+weasyprint==61.2
+pydyf==0.10.0  # Pin compatible version for weasyprint 61.2
+markdown==3.5.2

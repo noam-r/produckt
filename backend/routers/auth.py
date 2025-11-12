@@ -10,9 +10,10 @@ from backend.database import get_db
 from backend.models import User, Organization, UserRoleEnum
 from backend.models.user_role import UserRole as UserRoleAssociation
 from backend.schemas.auth import (
-    RegisterRequest, LoginRequest, SessionResponse, MessageResponse
+    RegisterRequest, LoginRequest, SessionResponse, MessageResponse, ChangePasswordRequest
 )
 from backend.auth.password import hash_password, verify_password
+from backend.auth.password_validator import validate_password_or_raise, PasswordValidationError
 from backend.auth.session import session_manager
 
 
@@ -69,6 +70,15 @@ def register(
             detail="Must provide either organization_name or organization_id"
         )
 
+    # Validate password complexity
+    try:
+        validate_password_or_raise(request.password)
+    except PasswordValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
     # Hash password
     password_hash = hash_password(request.password)
 
@@ -116,7 +126,8 @@ def register(
         roles=session.roles,
         organization_id=session.organization_id,
         organization_name=session.organization_name,
-        expires_at=session.expires_at
+        expires_at=session.expires_at,
+        force_password_change=user.force_password_change
     )
 
 
@@ -197,7 +208,8 @@ def login(
         roles=session.roles,
         organization_id=session.organization_id,
         organization_name=session.organization_name,
-        expires_at=session.expires_at
+        expires_at=session.expires_at,
+        force_password_change=user.force_password_change
     )
 
 
@@ -221,7 +233,7 @@ def logout(
 
 
 @router.get("/session", response_model=SessionResponse)
-def get_session(session_id: Optional[str] = Cookie(None)):
+def get_session(session_id: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
     """
     Get the current session information.
 
@@ -241,6 +253,10 @@ def get_session(session_id: Optional[str] = Cookie(None)):
             detail="Invalid or expired session"
         )
 
+    # Fetch user from database to get current force_password_change flag
+    user = db.query(User).filter(User.id == session.user_id).first()
+    force_password_change = user.force_password_change if user else False
+
     return SessionResponse(
         session_id=session.session_id,
         user_id=session.user_id,
@@ -250,5 +266,70 @@ def get_session(session_id: Optional[str] = Cookie(None)):
         roles=session.roles,
         organization_id=session.organization_id,
         organization_name=session.organization_name,
-        expires_at=session.expires_at
+        expires_at=session.expires_at,
+        force_password_change=force_password_change
     )
+
+
+@router.post("/change-password", response_model=MessageResponse)
+def change_password(
+    request: ChangePasswordRequest,
+    session_id: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Change user password.
+
+    Requires authentication. Validates current password and password complexity.
+    """
+    # Verify session
+    if not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated"
+        )
+
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session"
+        )
+
+    # Get user from database
+    user = db.query(User).filter(User.id == session.user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Verify current password
+    if not verify_password(request.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+
+    # Validate new password complexity
+    try:
+        validate_password_or_raise(request.new_password)
+    except PasswordValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+    # Prevent reusing the same password
+    if verify_password(request.new_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from current password"
+        )
+
+    # Update password and clear force_password_change flag
+    user.password_hash = hash_password(request.new_password)
+    user.force_password_change = False
+    db.commit()
+
+    return MessageResponse(message="Password changed successfully")

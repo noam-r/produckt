@@ -49,6 +49,7 @@ class User(Base, TimestampMixin):
 
     # Status
     is_active = Column(Boolean, default=True, nullable=False)
+    force_password_change = Column(Boolean, default=False, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
 
     # Relationships

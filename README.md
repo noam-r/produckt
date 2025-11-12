@@ -2,6 +2,33 @@
 
 AI-powered product discovery platform that helps product teams generate Market Requirements Documents (MRDs) and prioritize initiatives using Claude AI.
 
+## TL;DR - Quick Start
+
+```bash
+# 1. Copy and configure environment
+cp .env.example .env
+# Edit .env: set ANTHROPIC_API_KEY and SECRET_KEY (use: openssl rand -hex 32)
+
+# 2. Install backend dependencies
+python -m venv backend/venv
+source backend/venv/bin/activate
+pip install -r requirements.txt
+
+# 3. Install frontend dependencies
+cd frontend && npm install && cd ..
+
+# 4. Setup database
+alembic upgrade head
+python scripts/init_db.py
+
+# 5. Start servers
+./start.sh
+```
+
+Access at http://localhost:5173 with `admin@produckt.local` / `Admin123!`
+
+---
+
 ## Features
 
 - **AI-Powered Discovery** - Automatically generate contextual questions to understand product initiatives
@@ -14,63 +41,105 @@ AI-powered product discovery platform that helps product teams generate Market R
 
 ### Prerequisites
 
-- Python 3.10+
-- Node.js 18+
-- Anthropic API key ([Get one here](https://console.anthropic.com/))
+- **Python 3.10+**
+- **Node.js 20.19.0+ or 22.12.0+**
+  - Note: Node.js 18 is not supported due to frontend dependency requirements (Vite 7, React Router 7)
+  - If you have Node.js 18, upgrade using [nvm](https://github.com/nvm-sh/nvm): `nvm install 20 && nvm use 20`
+- **Anthropic API key** ([Get one here](https://console.anthropic.com/))
+- **System libraries for PDF generation** (WeasyPrint dependencies):
+  - **Ubuntu/Debian**: `sudo apt-get install -y python3-dev libpango-1.0-0 libpangoft2-1.0-0 libgdk-pixbuf2.0-0 libffi-dev shared-mime-info`
+  - **macOS**: `brew install pango gdk-pixbuf libffi`
+  - **Windows**: See [WeasyPrint documentation](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation)
 
 ### Installation
 
-1. **Clone and configure**
+**Important**: All commands should be run from the project root directory unless otherwise specified.
+
+1. **Clone and configure environment**
 
 ```bash
 # Copy environment template
 cp .env.example .env
 
-# Edit .env and set:
+# Edit .env and configure required variables:
 # - SECRET_KEY: Generate with: openssl rand -hex 32
-# - ANTHROPIC_API_KEY: Your Anthropic API key
+# - ANTHROPIC_API_KEY: Your Anthropic API key from https://console.anthropic.com/
 ```
 
 2. **Backend setup**
 
 ```bash
-# Create virtual environment
-cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+# Create virtual environment in backend directory
+python -m venv backend/venv
 
-# Install dependencies
+# Activate virtual environment
+source backend/venv/bin/activate  # Windows: backend\venv\Scripts\activate
+
+# Install Python dependencies (includes FastAPI, Anthropic SDK, WeasyPrint, etc.)
 pip install -r requirements.txt
 
-# Run migrations (from project root)
-cd ..
+# Run database migrations
 alembic upgrade head
+
+# Initialize database with roles and admin user
+python scripts/init_db.py
 ```
+
+**Important**: The `init_db.py` script creates:
+- Default RBAC roles (admin, product, technical, bizdev, viewer)
+- A default admin user with credentials:
+  - Email: `admin@produckt.local`
+  - Password: `Admin123!`
+- Proper role assignments so admin features work correctly
+
+⚠️ Change the admin password after first login!
 
 3. **Frontend setup**
 
 ```bash
+# Install Node.js dependencies
 cd frontend
 npm install
+cd ..
 ```
 
 4. **Start development servers**
 
-```bash
-# Terminal 1 - Backend (from project root)
-source backend/venv/bin/activate
-python -m uvicorn backend.main:app --reload
+**Option A: Using the startup script (Recommended)**
 
-# Terminal 2 - Frontend
+```bash
+./start.sh
+```
+
+The startup script will:
+- ✓ Validate all system requirements (Python, Node.js, system libraries)
+- ✓ Check environment configuration (.env file)
+- ✓ Verify backend and frontend dependencies are installed
+- ✓ Initialize database if needed (migrations + roles)
+- ✓ Check that ports 8000 and 5173 are available
+- ✓ Start both backend and frontend servers
+- ✓ Display access URLs and admin credentials
+
+Press `Ctrl+C` to stop both servers.
+
+**Option B: Manual startup (two terminals)**
+
+```bash
+# Terminal 1 - Backend API server
+source backend/venv/bin/activate  # Windows: backend\venv\Scripts\activate
+python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2 - Frontend development server
 cd frontend
 npm run dev
 ```
 
 ### Access
 
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
+- **Default Admin**: `admin@produckt.local` / `Admin123!`
 
 ## Project Structure
 
@@ -130,10 +199,27 @@ alembic revision --autogenerate -m "description"
 # Apply migrations
 alembic upgrade head
 
-# Reset database
+# Initialize/seed database (safe to run multiple times)
+python scripts/init_db.py
+
+# Reset database completely
 rm produck.db
 alembic upgrade head
+python scripts/init_db.py
 ```
+
+**Troubleshooting**:
+
+*Admin menus not appearing:*
+1. The user needs to have roles assigned in the new RBAC system
+2. Run `python scripts/init_db.py` to ensure roles are created
+3. For existing admin users, the script `fix_admin_roles.py` can assign roles
+4. Log out and log back in to refresh the session
+
+*PDF export fails with "PDF.__init__()" error:*
+1. This is a version incompatibility between WeasyPrint and pydyf
+2. Fix: `pip install pydyf==0.10.0` (already pinned in requirements.txt)
+3. The requirements file now includes the correct version
 
 ### Testing
 

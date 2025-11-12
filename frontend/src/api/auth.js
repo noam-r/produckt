@@ -26,4 +26,10 @@ export const authApi = {
     const { data } = await apiClient.get('/auth/session');
     return data;
   },
+
+  // Change password
+  changePassword: async (passwordData) => {
+    const { data } = await apiClient.post('/auth/change-password', passwordData);
+    return data;
+  },
 };

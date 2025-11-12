@@ -59,6 +59,36 @@ class LoginRequest(BaseModel):
     }
 
 
+class ChangePasswordRequest(BaseModel):
+    """Request schema for changing user password."""
+
+    current_password: str = Field(..., description="Current password for verification")
+    new_password: str = Field(..., min_length=8, description="New password (min 8 characters)")
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """Validate password meets minimum strength requirements."""
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+        if not any(c.isupper() for c in v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not any(c.islower() for c in v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Password must contain at least one digit')
+        return v
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [{
+                "current_password": "OldPass123",
+                "new_password": "NewSecurePass456"
+            }]
+        }
+    }
+
+
 class SessionResponse(BaseModel):
     """Response schema containing session information."""
 
@@ -71,6 +101,7 @@ class SessionResponse(BaseModel):
     organization_id: uuid.UUID = Field(..., description="Organization ID")
     organization_name: str = Field(..., description="Organization name")
     expires_at: datetime = Field(..., description="Session expiration timestamp")
+    force_password_change: bool = Field(default=False, description="Whether user must change password")
 
     model_config = {
         "json_schema_extra": {

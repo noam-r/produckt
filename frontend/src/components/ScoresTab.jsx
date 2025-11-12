@@ -26,6 +26,22 @@ import {
   HelpOutline,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  ResponsiveContainer,
+  Legend,
+  Tooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Cell,
+} from 'recharts';
 import { initiativesApi } from '../api/initiatives';
 import { useCalculateScores } from '../hooks/useInitiatives';
 import { useJobPolling } from '../hooks/useJobPolling';
@@ -443,6 +459,84 @@ export default function ScoresTab({ initiativeId }) {
 
           <Divider sx={{ my: 3 }} />
 
+          {/* RICE Components Bar Chart */}
+          {scores.rice_score != null && (
+            <Box sx={{ mt: 4, mb: 3 }}>
+              <Typography variant="subtitle2" fontWeight="600" gutterBottom sx={{ textAlign: 'center' }}>
+                RICE Components Comparison
+              </Typography>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  data={[
+                    {
+                      name: 'Reach',
+                      value: scores.reach || 0,
+                      normalized: scores.reach ? Math.min((scores.reach / 10000) * 100, 100) : 0,
+                      displayValue: scores.reach != null ? scores.reach.toLocaleString() : '—',
+                      color: '#1976d2',
+                    },
+                    {
+                      name: 'Impact',
+                      value: scores.impact || 0,
+                      normalized: scores.impact ? (scores.impact / 3) * 100 : 0,
+                      displayValue: scores.impact != null ? scores.impact.toFixed(1) : '—',
+                      color: '#7c4dff',
+                    },
+                    {
+                      name: 'Confidence',
+                      value: scores.confidence || 0,
+                      normalized: scores.confidence || 0,
+                      displayValue: scores.confidence != null ? `${scores.confidence}%` : '—',
+                      color: '#00c853',
+                    },
+                    {
+                      name: 'Effort',
+                      value: scores.effort || 0,
+                      normalized: scores.effort ? Math.min((scores.effort / 24) * 100, 100) : 0,
+                      displayValue: scores.effort != null ? `${scores.effort.toFixed(1)}pm` : '—',
+                      color: '#ff6d00',
+                    },
+                  ]}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: '#666', fontSize: 12 }}
+                  />
+                  <YAxis
+                    label={{ value: 'Normalized (0-100)', angle: -90, position: 'insideLeft', style: { fill: '#666', fontSize: 12 } }}
+                    tick={{ fill: '#666', fontSize: 12 }}
+                    domain={[0, 100]}
+                  />
+                  <Tooltip
+                    formatter={(value, name, props) => [props.payload.displayValue, props.payload.name]}
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #ddd',
+                      borderRadius: 4,
+                    }}
+                  />
+                  <Bar dataKey="normalized" radius={[8, 8, 0, 0]}>
+                    {[
+                      { color: '#1976d2' },
+                      { color: '#7c4dff' },
+                      { color: '#00c853' },
+                      { color: '#ff6d00' },
+                    ].map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 2 }}>
+                Values normalized for comparison. Actual values shown in tooltip.
+              </Typography>
+            </Box>
+          )}
+
+          <Divider sx={{ my: 3 }} />
+
           {scores.rice_reasoning && (
             <Box>
               <Typography variant="subtitle2" fontWeight="600" gutterBottom>
@@ -570,6 +664,62 @@ export default function ScoresTab({ initiativeId }) {
               </Box>
             </Grid>
           </Grid>
+
+          <Divider sx={{ my: 3 }} />
+
+          {/* FDV Radar Chart */}
+          <Box sx={{ mt: 4, mb: 3 }}>
+            <Typography variant="subtitle2" fontWeight="600" gutterBottom sx={{ textAlign: 'center' }}>
+              FDV Visual Profile
+            </Typography>
+            <ResponsiveContainer width="100%" height={350}>
+              <RadarChart
+                data={[
+                  { dimension: 'Feasibility', value: scores.feasibility || 0, fullMark: 10 },
+                  { dimension: 'Desirability', value: scores.desirability || 0, fullMark: 10 },
+                  { dimension: 'Viability', value: scores.viability || 0, fullMark: 10 },
+                ]}
+                cx="50%"
+                cy="50%"
+                outerRadius="70%"
+              >
+                <PolarGrid stroke="#e0e0e0" />
+                <PolarAngleAxis
+                  dataKey="dimension"
+                  tick={{ fill: '#666', fontSize: 14, fontWeight: 500 }}
+                />
+                <PolarRadiusAxis
+                  angle={90}
+                  domain={[0, 10]}
+                  tick={{ fill: '#999', fontSize: 12 }}
+                  tickCount={6}
+                />
+                <Radar
+                  name="FDV Score"
+                  dataKey="value"
+                  stroke="#1976d2"
+                  fill="#1976d2"
+                  fillOpacity={0.5}
+                  strokeWidth={2}
+                />
+                <Tooltip
+                  formatter={(value) => [`${value}/10`, 'Score']}
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #ddd',
+                    borderRadius: 4,
+                  }}
+                />
+                <Legend
+                  wrapperStyle={{ paddingTop: 20 }}
+                  iconType="circle"
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 2 }}>
+              A balanced triangle indicates a well-rounded initiative. Skewed shapes reveal areas needing attention.
+            </Typography>
+          </Box>
 
           <Divider sx={{ my: 3 }} />
 

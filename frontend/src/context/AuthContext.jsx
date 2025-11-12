@@ -14,6 +14,7 @@ const transformSessionToUser = (sessionData) => ({
   roles: sessionData.roles || [], // Multiple roles for RBAC
   organization_id: sessionData.organization_id,
   organization_name: sessionData.organization_name,
+  force_password_change: sessionData.force_password_change || false,
 });
 
 export function AuthProvider({ children }) {
