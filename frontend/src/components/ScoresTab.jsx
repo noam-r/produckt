@@ -63,6 +63,7 @@ export default function ScoresTab({ initiativeId }) {
   const [gapAnalysis, setGapAnalysis] = useState(null);
   const [currentJobId, setCurrentJobId] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
+  const [showAllWarnings, setShowAllWarnings] = useState(false);
   const queryClient = useQueryClient();
 
   // Fetch scores
@@ -312,11 +313,20 @@ export default function ScoresTab({ initiativeId }) {
           <Typography variant="body2" fontWeight="600" gutterBottom>
             Data Quality Notes:
           </Typography>
-          {scores.warnings.map((warning, index) => (
+          {(showAllWarnings ? scores.warnings : scores.warnings.slice(0, 3)).map((warning, index) => (
             <Typography key={index} variant="body2" sx={{ mt: 0.5 }}>
               • {warning}
             </Typography>
           ))}
+          {scores.warnings.length > 3 && (
+            <Button
+              size="small"
+              onClick={() => setShowAllWarnings(!showAllWarnings)}
+              sx={{ mt: 1, textTransform: 'none' }}
+            >
+              {showAllWarnings ? `Show less` : `Show all (${scores.warnings.length} notes)`}
+            </Button>
+          )}
         </Alert>
       )}
 
