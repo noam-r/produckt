@@ -15,6 +15,7 @@ from backend.schemas.auth import (
 from backend.auth.password import hash_password, verify_password
 from backend.auth.password_validator import validate_password_or_raise, PasswordValidationError
 from backend.auth.session import session_manager
+from backend.config import settings
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -107,14 +108,14 @@ def register(
         roles=[]  # Empty roles for new users
     )
 
-    # Set session cookie
+    # Set session cookie with security attributes
     response.set_cookie(
         key="session_id",
         value=session.session_id,
-        httponly=True,
-        secure=False,  # Set to True in production with HTTPS
-        samesite="lax",
-        max_age=86400  # 24 hours in seconds
+        httponly=True,  # Prevent JavaScript access (XSS protection)
+        secure=settings.environment == "production",  # HTTPS only in production
+        samesite="lax",  # CSRF protection
+        max_age=settings.session_timeout_minutes * 60  # Convert minutes to seconds
     )
 
     return SessionResponse(
@@ -189,14 +190,14 @@ def login(
         roles=role_names  # Multiple roles for RBAC
     )
 
-    # Set session cookie
+    # Set session cookie with security attributes
     response.set_cookie(
         key="session_id",
         value=session.session_id,
-        httponly=True,
-        secure=False,  # Set to True in production with HTTPS
-        samesite="lax",
-        max_age=86400  # 24 hours in seconds
+        httponly=True,  # Prevent JavaScript access (XSS protection)
+        secure=settings.environment == "production",  # HTTPS only in production
+        samesite="lax",  # CSRF protection
+        max_age=settings.session_timeout_minutes * 60  # Convert minutes to seconds
     )
 
     return SessionResponse(

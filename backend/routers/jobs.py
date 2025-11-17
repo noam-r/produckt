@@ -44,11 +44,11 @@ def get_job_status(
         403: Job belongs to different organization
     """
     job_repo = JobRepository(db)
-    job = job_repo.get_by_id(job_id)
+    job = job_repo.get_by_id(job_id, current_user.organization_id)
 
     # Return 404 if job doesn't exist or belongs to different organization
     # This prevents leaking information about jobs in other organizations
-    if not job or job.organization_id != current_user.organization_id:
+    if not job:
         raise HTTPException(
             status_code=404,
             detail=f"Job {job_id} not found"
