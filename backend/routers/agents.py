@@ -547,21 +547,14 @@ def export_mrd_pdf(
     logger = logging.getLogger(__name__)
 
     try:
-        # Get initiative
+        # Get initiative (with organization filtering)
         initiative_repo = InitiativeRepository(db)
-        initiative = initiative_repo.get_by_id(initiative_id)
+        initiative = initiative_repo.get_by_id(initiative_id, current_user.organization_id)
 
         if not initiative:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Initiative not found"
-            )
-
-        # Check access
-        if initiative.organization_id != current_user.organization_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to access this initiative"
             )
 
         # Get MRD
@@ -1085,19 +1078,12 @@ def get_job_status(
         Job status with progress information
     """
     job_repo = JobRepository(db)
-    job = job_repo.get_by_id(job_id)
+    job = job_repo.get_by_id(job_id, current_user.organization_id)
 
     if not job:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Job not found"
-        )
-
-    # Verify job belongs to user's organization
-    if job.organization_id != current_user.organization_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
         )
 
     return {

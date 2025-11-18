@@ -1,7 +1,9 @@
 """
-Session management for authentication (in-memory POC).
+Session management for authentication.
 
-For production, this should be replaced with Redis or a database-backed session store.
+Uses in-memory storage with automatic cleanup of expired sessions.
+For high-availability deployments with multiple instances, consider using
+a shared session store (Redis, database, etc.).
 """
 
 import secrets
@@ -31,14 +33,15 @@ class Session:
 
 class SessionManager:
     """
-    In-memory session manager for POC.
+    In-memory session manager with automatic cleanup.
 
-    WARNING: This is not suitable for production as:
-    1. Sessions are lost on server restart
-    2. Does not scale across multiple server instances
-    3. Memory usage grows with active sessions
+    Features:
+    - Automatic expiration of old sessions
+    - Configurable session duration
+    - Memory-efficient with periodic cleanup
 
-    For production, use Redis or a database-backed session store.
+    Note: For high-availability deployments with multiple server instances,
+    consider using a shared session store (Redis, database, etc.).
     """
 
     def __init__(self, session_duration_minutes: int = 43200):  # 30 days default

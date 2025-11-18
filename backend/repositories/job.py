@@ -18,14 +18,17 @@ class JobRepository(BaseRepository[Job]):
         """Initialize JobRepository with Job model."""
         super().__init__(Job, db)
 
-    def get_by_id(self, job_id: UUID) -> Optional[Job]:
-        """Get job by ID (no org filtering)."""
-        query = select(Job).where(Job.id == job_id)
-        result = self.db.execute(query)
-        return result.scalar_one_or_none()
-
-    def get_job_by_id(self, job_id: UUID, organization_id: UUID) -> Optional[Job]:
-        """Get job by ID with organization filtering."""
+    def get_by_id(self, job_id: UUID, organization_id: UUID) -> Optional[Job]:
+        """
+        Get job by ID with organization filtering.
+        
+        Args:
+            job_id: Job ID
+            organization_id: Organization ID for security filtering
+            
+        Returns:
+            Job if found and belongs to organization, None otherwise
+        """
         query = select(Job).where(
             Job.id == job_id,
             Job.organization_id == organization_id
@@ -156,17 +159,28 @@ class JobRepository(BaseRepository[Job]):
         result = self.db.execute(query)
         return list(result.scalars().all())
 
-    # Convenience methods that match test expectations
+    # Internal helper method for background job processing (no org check needed)
+    def _get_by_id_internal(self, job_id: UUID) -> Optional[Job]:
+        """
+        Internal method to get job by ID without organization filtering.
+        Only used by background job processor which already has the job context.
+        DO NOT use in API endpoints - use get_by_id() instead.
+        """
+        query = select(Job).where(Job.id == job_id)
+        result = self.db.execute(query)
+        return result.scalar_one_or_none()
+
+    # Convenience methods for background job processing
     def complete_job(self, job_id: UUID, result_data: dict) -> Job:
-        """Complete a job by ID."""
-        job = self.get_by_id(job_id)
+        """Complete a job by ID (for background processing)."""
+        job = self._get_by_id_internal(job_id)
         if not job:
             raise ValueError(f"Job {job_id} not found")
         return self.mark_completed(job, result_data)
 
     def fail_job(self, job_id: UUID, error_message: str, error_details: Optional[dict] = None) -> Job:
-        """Fail a job by ID."""
-        job = self.get_by_id(job_id)
+        """Fail a job by ID (for background processing)."""
+        job = self._get_by_id_internal(job_id)
         if not job:
             raise ValueError(f"Job {job_id} not found")
         return self.mark_failed(job, error_message, error_details)
@@ -178,8 +192,8 @@ class JobRepository(BaseRepository[Job]):
         progress_percent: Optional[int] = None,
         progress_message: Optional[str] = None
     ) -> Job:
-        """Update job status by ID."""
-        job = self.get_by_id(job_id)
+        """Update job status by ID (for background processing)."""
+        job = self._get_by_id_internal(job_id)
         if not job:
             raise ValueError(f"Job {job_id} not found")
         return self.update_status(job, status, progress_message, progress_percent)

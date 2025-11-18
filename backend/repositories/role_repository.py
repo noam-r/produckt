@@ -10,13 +10,26 @@ from backend.models.role import Role
 
 
 class RoleRepository:
-    """Repository for managing roles."""
+    """
+    Repository for managing roles.
+    
+    SECURITY NOTE: Roles are GLOBAL (system-wide), not organization-specific.
+    This is intentional design - roles define system-wide permissions that are
+    assigned to users within their organizations. The roles table does not have
+    an organization_id column.
+    
+    Examples of global roles: admin, business_dev, technical, product, operations, financial
+    """
 
     def __init__(self, db: Session):
         self.db = db
 
     def get_all(self) -> List[Role]:
-        """Get all roles."""
+        """
+        Get all roles (global, not filtered by organization).
+        
+        Roles are system-wide and shared across all organizations.
+        """
         return self.db.query(Role).order_by(Role.name).all()
 
     def get_by_id(self, role_id: UUID) -> Optional[Role]:
