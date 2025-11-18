@@ -1,0 +1,255 @@
+/* ProDuckt Brand Website - Responsive Styles */
+
+/* Tablet (768px to 1023px) */
+@media (max-width: 1023px) {
+  .nav-menu {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    right: 0;
+    background-color: white;
+    flex-direction: column;
+    padding: var(--space-6);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-100%);
+    opacity: 0;
+    visibility: hidden;
+    transition: all var(--transition-normal);
+  }
+  
+  .nav-menu.active {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+  }
+  
+  .nav-toggle {
+    display: flex;
+  }
+  
+  .nav-toggle.active .hamburger:nth-child(1) {
+    transform: rotate(45deg) translate(5px, 5px);
+  }
+  
+  .nav-toggle.active .hamburger:nth-child(2) {
+    opacity: 0;
+  }
+  
+  .nav-toggle.active .hamburger:nth-child(3) {
+    transform: rotate(-45deg) translate(7px, -6px);
+  }
+  
+  .hero {
+    padding: calc(70px + var(--space-16)) 0 var(--space-16);
+  }
+  
+  .hero .container,
+  .hero-container {
+    grid-template-columns: 1fr;
+    gap: var(--space-12);
+    text-align: center;
+  }
+  
+  .hero-title {
+    font-size: var(--text-4xl);
+  }
+  
+  .hero-subtitle {
+    font-size: var(--text-lg);
+  }
+  
+  .hero-cta {
+    justify-content: center;
+  }
+  
+  .features-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+  
+  .steps {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-12);
+  }
+  
+  .step {
+    max-width: 400px;
+  }
+  
+  .step-arrow {
+    transform: rotate(90deg);
+    margin: 0;
+  }
+  
+  .screenshot-gallery {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+  
+  .cta-benefits {
+    gap: var(--space-4);
+  }
+  
+  .footer-content {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-8);
+  }
+  
+  .footer-brand {
+    grid-column: 1 / -1;
+    text-align: center;
+    max-width: none;
+    margin-bottom: var(--space-8);
+  }
+}
+
+/* Mobile (320px to 767px) */
+@media (max-width: 767px) {
+  .container,
+  .section-container,
+  .hero-container,
+  .nav-container,
+  .footer-container,
+  .cta-container {
+    padding: 0 var(--space-4);
+  }
+  
+  .nav-container {
+    height: 60px;
+  }
+  
+  .nav-brand .logo {
+    height: 32px;
+  }
+  
+  .nav-menu {
+    top: 60px;
+  }
+  
+  .hero {
+    padding: calc(60px + var(--space-12)) 0 var(--space-12);
+  }
+  
+  .hero-title {
+    font-size: var(--text-3xl);
+    line-height: 1.2;
+  }
+  
+  .hero-subtitle {
+    font-size: var(--text-base);
+  }
+  
+  .hero-tagline {
+    font-size: var(--text-base);
+  }
+  
+  .hero-cta {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+  
+  .btn-large {
+    padding: var(--space-4) var(--space-6);
+    font-size: var(--text-base);
+  }
+  
+  .btn-xl {
+    padding: var(--space-4) var(--space-6);
+    font-size: var(--text-lg);
+  }
+  
+  .features,
+  .how-it-works,
+  .screenshots,
+  .cta {
+    padding: var(--space-12) 0;
+  }
+  
+  .section-header {
+    margin-bottom: var(--space-12);
+  }
+  
+  .section-header h2 {
+    font-size: var(--text-3xl);
+  }
+  
+  .section-header p {
+    font-size: var(--text-base);
+  }
+  
+  .features-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
+  }
+  
+  .feature-card {
+    padding: var(--space-6);
+  }
+  
+  .steps {
+    gap: var(--space-8);
+  }
+  
+  .step-number {
+    width: 50px;
+    height: 50px;
+    font-size: var(--text-xl);
+  }
+  
+  .step-content h3 {
+    font-size: var(--text-lg);
+  }
+  
+  .step-arrow {
+    font-size: var(--text-2xl);
+  }
+  
+  .screenshot-gallery {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+  
+  .cta h2 {
+    font-size: var(--text-3xl);
+  }
+  
+  .cta p {
+    font-size: var(--text-base);
+  }
+  
+  .cta-benefits {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  
+  .footer {
+    padding: var(--space-12) 0 var(--space-6);
+  }
+  
+  .footer-content {
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
+    text-align: center;
+  }
+  
+  .footer-brand {
+    margin-bottom: var(--space-6);
+  }
+  
+  .footer-links {
+    text-align: center;
+  }
+  
+  .lightbox-content {
+    max-width: 95%;
+    max-height: 95%;
+  }
+  
+  .lightbox-close {
+    top: -30px;
+    font-size: var(--text-3xl);
+  }
+}
