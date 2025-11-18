@@ -1,0 +1,11 @@
+# Add your custom domain here if you have one
+# Example: produckt.com
+# 
+# Instructions:
+# 1. Uncomment and replace with your domain
+# 2. Configure DNS A records to point to GitHub Pages IPs:
+#    185.199.108.153
+#    185.199.109.153
+#    185.199.110.153
+#    185.199.111.153
+# 3. Or configure CNAME record to point to: <username>.github.io
