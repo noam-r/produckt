@@ -1,6 +1,7 @@
 # FastAPI and ASGI server
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
+gunicorn==21.2.0
 python-multipart==0.0.6
 
 # Database
@@ -15,6 +16,7 @@ python-jose[cryptography]==3.3.0
 # Pydantic
 pydantic==2.5.3
 pydantic-settings==2.1.0
+email-validator==2.1.0
 
 # LLM Integration
 anthropic==0.18.1

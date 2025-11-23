@@ -1,0 +1,167 @@
+# ============================================================================
+# ProDuckt Backend Dockerfile - Multi-Stage Build
+# ============================================================================
+# Stage 1: Builder - Install dependencies and compile wheels
+# Stage 2: Runtime - Minimal production image with application code
+# ============================================================================
+
+# ============================================================================
+# Stage 1: Builder
+# ============================================================================
+FROM python:3.11-slim as builder
+
+# Set working directory
+WORKDIR /build
+
+# Install build dependencies and WeasyPrint system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Build tools
+    gcc \
+    g++ \
+    make \
+    # WeasyPrint dependencies
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
+    libffi-dev \
+    libcairo2 \
+    libpangocairo-1.0-0 \
+    shared-mime-info \
+    # Additional dependencies
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements file
+COPY requirements.txt .
+
+# Install Python dependencies
+# Use --no-cache-dir to reduce image size
+# Create wheels for faster installation in runtime stage
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# ============================================================================
+# Stage 2: Development
+# ============================================================================
+FROM python:3.11-slim as development
+
+# Set working directory
+WORKDIR /app
+
+# Install runtime dependencies and development tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # WeasyPrint runtime dependencies
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
+    libffi8 \
+    libcairo2 \
+    libpangocairo-1.0-0 \
+    shared-mime-info \
+    # Utilities
+    curl \
+    # PostgreSQL client for pg_isready command
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python packages from builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Create non-root user for security
+RUN groupadd -r appuser && \
+    useradd -r -g appuser -u 1000 appuser && \
+    mkdir -p /app/data && \
+    chown -R appuser:appuser /app
+
+# Copy application code (will be overridden by volume mount in dev)
+COPY --chown=appuser:appuser backend ./backend
+COPY --chown=appuser:appuser alembic ./alembic
+COPY --chown=appuser:appuser alembic.ini .
+COPY --chown=appuser:appuser scripts ./scripts
+COPY --chown=appuser:appuser requirements.txt .
+
+# Copy entrypoint scripts
+COPY --chown=appuser:appuser docker-entrypoint.sh /usr/local/bin/
+COPY --chown=appuser:appuser docker-entrypoint-dev.sh /app/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
+    chmod +x /app/docker-entrypoint-dev.sh
+
+# Switch to non-root user
+USER appuser
+
+# Expose port
+EXPOSE 8000
+
+# Health check configuration
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Set entrypoint
+ENTRYPOINT ["/app/docker-entrypoint-dev.sh"]
+
+# Default command for development (with reload)
+CMD ["uvicorn", "backend.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
+
+# ============================================================================
+# Stage 3: Production
+# ============================================================================
+FROM python:3.11-slim as production
+
+# Set working directory
+WORKDIR /app
+
+# Install only runtime dependencies (no build tools)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # WeasyPrint runtime dependencies
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
+    libffi8 \
+    libcairo2 \
+    libpangocairo-1.0-0 \
+    shared-mime-info \
+    # Utilities
+    curl \
+    # PostgreSQL client for pg_isready command
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python packages from builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Create non-root user for security
+RUN groupadd -r appuser && \
+    useradd -r -g appuser -u 1000 appuser && \
+    mkdir -p /app/data && \
+    chown -R appuser:appuser /app
+
+# Copy application code
+COPY --chown=appuser:appuser backend ./backend
+COPY --chown=appuser:appuser alembic ./alembic
+COPY --chown=appuser:appuser alembic.ini .
+COPY --chown=appuser:appuser scripts ./scripts
+COPY --chown=appuser:appuser requirements.txt .
+
+# Copy entrypoint scripts
+COPY --chown=appuser:appuser docker-entrypoint.sh /usr/local/bin/
+COPY --chown=appuser:appuser docker-entrypoint-dev.sh /app/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
+    chmod +x /app/docker-entrypoint-dev.sh
+
+# Switch to non-root user
+USER appuser
+
+# Expose port
+EXPOSE 8000
+
+# Health check configuration
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Set entrypoint
+ENTRYPOINT ["docker-entrypoint.sh"]
+
+# Default command (can be overridden)
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

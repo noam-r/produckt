@@ -1,0 +1,53 @@
+# Example Security Scanner Configuration
+# Copy this file to .security-scan.yaml and customize as needed
+
+# File patterns to include in the scan
+include:
+  - "backend/**/*.py"
+  - "frontend/src/**/*.js"
+  - "frontend/src/**/*.jsx"
+
+# File patterns to exclude from the scan
+exclude:
+  - "**/tests/**"
+  - "**/test_*.py"
+  - "**/__pycache__/**"
+  - "**/venv/**"
+  - "**/node_modules/**"
+  - "**/alembic/versions/**"
+  - "**/.git/**"
+
+# Security analyzers to run
+# Options: authentication, authorization, data_protection, api_security, infrastructure
+# Use ["all"] to run all analyzers
+analyzers:
+  - authentication
+  - authorization
+  - data_protection
+  - api_security
+  - infrastructure
+
+# Severity filtering
+severity:
+  # Minimum severity level to report
+  # Options: info, low, medium, high, critical
+  min_level: "medium"
+
+# Output configuration
+output:
+  # Output format: json, markdown, html
+  format: "markdown"
+  
+  # Output file path (optional, auto-generated if not specified)
+  # path: "security-report.md"
+
+# Performance settings
+performance:
+  # Number of parallel workers for scanning
+  max_workers: 4
+  
+  # Timeout for entire scan in seconds
+  timeout: 300
+  
+  # Maximum file size to scan in MB
+  file_size_limit_mb: 10

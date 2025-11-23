@@ -1,0 +1,231 @@
+# docker-compose.override.yml.example
+#
+# This is a template for local Docker Compose overrides.
+# Copy this file to docker-compose.override.yml and customize it for your local environment.
+#
+# Usage:
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#   # Edit docker-compose.override.yml with your customizations
+#   docker-compose up
+#
+# Docker Compose automatically applies docker-compose.override.yml if it exists.
+# This file is gitignored, so your local customizations won't be committed.
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # Backend Service Overrides
+  # ============================================================================
+  backend:
+    # Example: Use a different port for the backend
+    # ports:
+    #   - "8001:8000"
+
+    # Example: Add additional environment variables
+    # environment:
+    #   - LOG_LEVEL=DEBUG
+    #   - CUSTOM_SETTING=value
+
+    # Example: Mount additional volumes
+    # volumes:
+    #   - ./local-data:/app/local-data
+    #   - ./custom-config.yml:/app/config.yml:ro
+
+    # Example: Override the command
+    # command: uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000 --log-level debug
+
+    # Example: Add resource limits
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2.0'
+    #       memory: 2G
+    #     reservations:
+    #       cpus: '0.5'
+    #       memory: 512M
+
+    # Example: Add extra hosts for local development
+    # extra_hosts:
+    #   - "api.example.com:127.0.0.1"
+
+  # ============================================================================
+  # Frontend Service Overrides
+  # ============================================================================
+  frontend:
+    # Example: Use a different port for the frontend
+    # ports:
+    #   - "3000:5173"
+
+    # Example: Add environment variables for local API
+    # environment:
+    #   - VITE_API_BASE_URL=http://localhost:8001
+
+    # Example: Mount additional static assets
+    # volumes:
+    #   - ./local-assets:/app/public/local-assets
+
+  # ============================================================================
+  # Database Service Overrides (if using PostgreSQL)
+  # ============================================================================
+  # Uncomment this section if you're using PostgreSQL and want to customize it
+  # db:
+  #   # Example: Expose PostgreSQL port to host for direct access
+  #   ports:
+  #     - "5432:5432"
+  #
+  #   # Example: Use a different PostgreSQL version
+  #   image: postgres:16-alpine
+  #
+  #   # Example: Add custom PostgreSQL configuration
+  #   command: postgres -c log_statement=all -c log_duration=on
+  #
+  #   # Example: Mount custom initialization scripts
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #     - ./init-scripts:/docker-entrypoint-initdb.d:ro
+
+  # ============================================================================
+  # Additional Services
+  # ============================================================================
+  # Example: Add a local mail server for testing
+  # mailhog:
+  #   image: mailhog/mailhog:latest
+  #   ports:
+  #     - "1025:1025"  # SMTP
+  #     - "8025:8025"  # Web UI
+  #   networks:
+  #     - produck-network
+
+  # Example: Add Redis for caching
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+  #   networks:
+  #     - produck-network
+
+  # Example: Add a database admin tool
+  # adminer:
+  #   image: adminer:latest
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     - ADMINER_DEFAULT_SERVER=db
+  #   networks:
+  #     - produck-network
+  #   depends_on:
+  #     - db
+
+# ============================================================================
+# Additional Volumes
+# ============================================================================
+# volumes:
+#   redis-data:
+
+# ============================================================================
+# Additional Networks
+# ============================================================================
+# networks:
+#   external-network:
+#     external: true
+
+# ============================================================================
+# Common Override Scenarios
+# ============================================================================
+
+# Scenario 1: Development with external database
+# ----------------------------------------------
+# If you want to use an external database instead of the containerized one:
+#
+# services:
+#   backend:
+#     environment:
+#       - DATABASE_URL=postgresql://user:pass@external-db.example.com:5432/produck
+#   db:
+#     profiles:
+#       - disabled  # This prevents the db service from starting
+
+# Scenario 2: Debug mode with verbose logging
+# --------------------------------------------
+# services:
+#   backend:
+#     environment:
+#       - LOG_LEVEL=DEBUG
+#       - PYTHONUNBUFFERED=1
+#     command: uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000 --log-level debug
+#   frontend:
+#     environment:
+#       - VITE_LOG_LEVEL=debug
+
+# Scenario 3: Performance testing with resource limits
+# -----------------------------------------------------
+# services:
+#   backend:
+#     deploy:
+#       resources:
+#         limits:
+#           cpus: '0.5'
+#           memory: 512M
+#   frontend:
+#     deploy:
+#       resources:
+#         limits:
+#           cpus: '0.25'
+#           memory: 256M
+
+# Scenario 4: Local SSL/TLS development
+# --------------------------------------
+# services:
+#   nginx:
+#     image: nginx:alpine
+#     ports:
+#       - "443:443"
+#     volumes:
+#       - ./nginx-ssl.conf:/etc/nginx/nginx.conf:ro
+#       - ./certs:/etc/nginx/certs:ro
+#     networks:
+#       - produck-network
+#     depends_on:
+#       - frontend
+#       - backend
+
+# Scenario 5: Multi-developer team with port conflicts
+# -----------------------------------------------------
+# If port 5173 or 8000 are already in use on your machine:
+#
+# services:
+#   backend:
+#     ports:
+#       - "8888:8000"
+#   frontend:
+#     ports:
+#       - "3000:5173"
+#     environment:
+#       - VITE_API_BASE_URL=http://localhost:8888
+
+# Scenario 6: Mount local Python packages for development
+# --------------------------------------------------------
+# If you're developing a local Python package that ProDuckt depends on:
+#
+# services:
+#   backend:
+#     volumes:
+#       - ./backend:/app/backend
+#       - ../my-local-package:/app/my-local-package
+#     environment:
+#       - PYTHONPATH=/app:/app/my-local-package
+
+# Scenario 7: Use pre-built images instead of building locally
+# -------------------------------------------------------------
+# If you want to use images from a registry instead of building:
+#
+# services:
+#   backend:
+#     image: ghcr.io/your-org/produck-backend:develop
+#     build: null  # Disable building
+#   frontend:
+#     image: ghcr.io/your-org/produck-frontend:develop
+#     build: null  # Disable building

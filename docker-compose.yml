@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: produck-backend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+    environment:
+      # Database
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/produck.db}
+      
+      # Authentication
+      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-secure-32-char-minimum-key}
+      - SESSION_TIMEOUT_MINUTES=${SESSION_TIMEOUT_MINUTES:-60}
+      - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-12}
+      
+      # Anthropic
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_API_TIMEOUT=${ANTHROPIC_API_TIMEOUT:-600}
+      
+      # Application
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - HOST=0.0.0.0
+      - PORT=8000
+      - RELOAD=${RELOAD:-True}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      
+      # Rate Limiting
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-100}
+      - RATE_LIMIT_ORG_PER_MINUTE=${RATE_LIMIT_ORG_PER_MINUTE:-1000}
+      
+      # Optional: Observability
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-produck-poc}
+    volumes:
+      - produck-data:/app/data
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    # Uncomment the following when using PostgreSQL
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
+    networks:
+      - produck-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: ${BUILD_TARGET:-development}
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
+    container_name: produck-frontend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "5173:5173"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5173"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - produck-network
+
+  # Optional PostgreSQL service (commented out by default, SQLite is used)
+  # Uncomment this section and update DATABASE_URL to use PostgreSQL
+  # db:
+  #   image: postgres:15-alpine
+  #   container_name: produck-db
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   cap_drop:
+  #     - ALL
+  #   cap_add:
+  #     - CHOWN
+  #     - SETGID
+  #     - SETUID
+  #     - DAC_OVERRIDE
+  #   environment:
+  #     - POSTGRES_DB=${POSTGRES_DB:-produck}
+  #     - POSTGRES_USER=${POSTGRES_USER:-produck}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-produck}"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 30s
+  #   restart: unless-stopped
+  #   networks:
+  #     - produck-network
+  #   # Note: No ports exposed to host for security (internal network only)
+
+volumes:
+  produck-data:
+    name: produck-data
+  postgres-data:
+    name: postgres-data
+
+networks:
+  produck-network:
+    name: produck-network
+    driver: bridge

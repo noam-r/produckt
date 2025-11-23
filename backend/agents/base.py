@@ -2,6 +2,7 @@
 Base agent class for all AI agents.
 """
 
+import logging
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
@@ -9,6 +10,8 @@ from sqlalchemy.orm import Session
 from backend.llm.client import get_anthropic_client, AnthropicClient
 from backend.models import LLMCall
 from backend.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class BaseAgent:
@@ -39,6 +42,7 @@ class BaseAgent:
         self.agent_name = agent_name
         self.model = model or settings.anthropic_model
         self.client: AnthropicClient = get_anthropic_client()
+        logger.debug(f"Initialized {agent_name} with model {self.model}")
 
     def call_llm(
         self,
@@ -65,15 +69,34 @@ class BaseAgent:
         Returns:
             tuple: (response_text, llm_call_record, stop_reason)
         """
-        return self.client.create_message(
-            db=self.db,
-            agent_name=self.agent_name,
-            system=system,
-            messages=messages,
-            model=self.model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            organization_id=organization_id,
-            user_id=user_id,
-            initiative_id=initiative_id
+        logger.info(
+            f"LLM call started: agent={self.agent_name}, model={self.model}, "
+            f"max_tokens={max_tokens}, temperature={temperature}"
         )
+        
+        try:
+            result = self.client.create_message(
+                db=self.db,
+                agent_name=self.agent_name,
+                system=system,
+                messages=messages,
+                model=self.model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                organization_id=organization_id,
+                user_id=user_id,
+                initiative_id=initiative_id
+            )
+            
+            logger.info(
+                f"LLM call completed: agent={self.agent_name}, "
+                f"response_length={len(result[0])}, stop_reason={result[2]}"
+            )
+            
+            return result
+        except Exception as e:
+            logger.error(
+                f"LLM call failed: agent={self.agent_name}, error={str(e)}",
+                exc_info=True
+            )
+            raise

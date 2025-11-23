@@ -1,0 +1,189 @@
+name: Docker Build and Test
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Extract metadata for frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          target: development
+          push: false
+          load: true
+          tags: produck-backend:test
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          target: development
+          push: false
+          load: true
+          tags: produck-frontend:test
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Create test environment file
+        run: |
+          cat > .env << EOF
+          ENVIRONMENT=test
+          SECRET_KEY=test-secret-key-for-ci-only
+          DATABASE_URL=sqlite:///./data/produck_test.db
+          ANTHROPIC_API_KEY=sk-ant-test-key
+          ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+          LOG_LEVEL=INFO
+          VITE_API_BASE_URL=http://backend:8000
+          BUILD_TARGET=development
+          EOF
+
+      - name: Start services with docker-compose
+        run: |
+          docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+        env:
+          COMPOSE_PROJECT_NAME: produck-ci
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for backend to be healthy..."
+          timeout 120 bash -c 'until docker-compose ps | grep backend | grep -q "healthy"; do sleep 2; done' || {
+            echo "Backend failed to become healthy"
+            docker-compose logs backend
+            exit 1
+          }
+          echo "Backend is healthy"
+          
+          echo "Waiting for frontend to be ready..."
+          timeout 60 bash -c 'until curl -f http://localhost:5173 > /dev/null 2>&1; do sleep 2; done' || {
+            echo "Frontend failed to start"
+            docker-compose logs frontend
+            exit 1
+          }
+          echo "Frontend is ready"
+
+      - name: Run backend tests
+        run: |
+          docker-compose exec -T backend pytest tests/ -v --tb=short || {
+            echo "Tests failed, showing logs:"
+            docker-compose logs backend
+            exit 1
+          }
+
+      - name: Check backend health endpoint
+        run: |
+          curl -f http://localhost:8000/health || {
+            echo "Health check failed"
+            docker-compose logs backend
+            exit 1
+          }
+
+      - name: Check frontend accessibility
+        run: |
+          curl -f http://localhost:5173 || {
+            echo "Frontend check failed"
+            docker-compose logs frontend
+            exit 1
+          }
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Backend Logs ==="
+          docker-compose logs backend
+          echo "=== Frontend Logs ==="
+          docker-compose logs frontend
+          echo "=== Container Status ==="
+          docker-compose ps
+
+      - name: Stop services
+        if: always()
+        run: docker-compose down -v
+
+      - name: Build and push backend image (on push to main/develop)
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          target: production
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build and push frontend image (on push to main/develop)
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          target: production
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
