@@ -1,0 +1,70 @@
+# Version control
+.git
+.gitignore
+
+# Kiro specs and configuration
+.kiro
+
+# Python cache and compiled files
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv
+env
+ENV
+backend/venv
+
+# Node modules
+node_modules
+frontend/node_modules
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs
+
+# Temporary files
+tmp/
+temp/
+
+# Test cache
+.pytest_cache
+.coverage
+htmlcov
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Database files (should use volumes)
+*.db
+*.sqlite
+*.sqlite3
+
+# Documentation
+docs/
+README.md
+DEPLOYMENT.md
+PROJECT_STRUCTURE.md
+
+# CI/CD
+.github
+
+# Frontend build artifacts (not needed in backend image)
+frontend/dist
+frontend/build

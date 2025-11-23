@@ -4,6 +4,19 @@ AI-powered product discovery platform that helps product teams generate Market R
 
 ## TL;DR - Quick Start
 
+**With Docker (Recommended):**
+
+```bash
+# 1. Copy and configure environment
+cp .env.example .env
+# Edit .env: set ANTHROPIC_API_KEY and SECRET_KEY (use: openssl rand -hex 32)
+
+# 2. Start all services
+docker-compose up
+```
+
+**Without Docker:**
+
 ```bash
 # 1. Copy and configure environment
 cp .env.example .env
@@ -41,6 +54,14 @@ Access at http://localhost:5173 with `admin@produckt.local` / `Admin123!`
 
 ### Prerequisites
 
+**With Docker (Recommended):**
+- **Docker** 20.10+ ([Install Docker](https://docs.docker.com/get-docker/))
+- **Docker Compose** 2.0+ (included with Docker Desktop)
+- **Anthropic API key** ([Get one here](https://console.anthropic.com/))
+
+That's it! No Python, Node.js, or system libraries needed on your host machine.
+
+**Without Docker:**
 - **Python 3.10+**
 - **Node.js 20.19.0+ or 22.12.0+**
   - Note: Node.js 18 is not supported due to frontend dependency requirements (Vite 7, React Router 7)
@@ -53,9 +74,11 @@ Access at http://localhost:5173 with `admin@produckt.local` / `Admin123!`
 
 ### Installation
 
-**Important**: All commands should be run from the project root directory unless otherwise specified.
+#### Option 1: Docker (Recommended)
 
-1. **Clone and configure environment**
+The easiest way to get started. All dependencies are bundled in containers.
+
+**1. Configure environment**
 
 ```bash
 # Copy environment template
@@ -66,7 +89,42 @@ cp .env.example .env
 # - ANTHROPIC_API_KEY: Your Anthropic API key from https://console.anthropic.com/
 ```
 
-2. **Backend setup**
+**2. Start all services**
+
+```bash
+docker-compose up
+```
+
+That's it! The containers will:
+- ✓ Install all dependencies automatically
+- ✓ Initialize the database with migrations
+- ✓ Create default roles and admin user
+- ✓ Start backend and frontend servers
+
+Access ProDuckt at http://localhost:5173 with credentials `admin@produckt.local` / `Admin123!`
+
+**For detailed Docker usage, see [DOCKER.md](DOCKER.md)** - includes development workflow, production deployment, troubleshooting, and more.
+
+---
+
+#### Option 2: Manual Installation
+
+For those who prefer to run services directly on their host machine.
+
+**Important**: All commands should be run from the project root directory unless otherwise specified.
+
+**1. Configure environment**
+
+```bash
+# Copy environment template
+cp .env.example .env
+
+# Edit .env and configure required variables:
+# - SECRET_KEY: Generate with: openssl rand -hex 32
+# - ANTHROPIC_API_KEY: Your Anthropic API key from https://console.anthropic.com/
+```
+
+**2. Backend setup**
 
 ```bash
 # Create virtual environment in backend directory
@@ -100,7 +158,7 @@ python scripts/init_db.py
 
 ⚠️ Change the admin password after first login!
 
-3. **Frontend setup**
+**3. Frontend setup**
 
 ```bash
 # Install Node.js dependencies
@@ -109,7 +167,7 @@ npm install
 cd ..
 ```
 
-4. **Start development servers**
+**4. Start development servers**
 
 **Option A: Using the startup script (Recommended)**
 

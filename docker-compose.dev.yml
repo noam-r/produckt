@@ -1,0 +1,38 @@
+version: '3.8'
+
+# Development environment overrides
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  backend:
+    build:
+      target: development
+    environment:
+      # Development-specific environment variables
+      - BUILD_TARGET=development
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+      - RELOAD=True
+    volumes:
+      # Mount source code for hot reload
+      - ./backend:/app/backend
+      - ./alembic:/app/alembic
+      - ./scripts:/app/scripts
+      # Keep data volume for database persistence
+      - produck-data:/app/data
+    # Override entrypoint to use development startup script
+    entrypoint: ["/app/docker-entrypoint-dev.sh"]
+
+  frontend:
+    build:
+      target: development
+    environment:
+      - BUILD_TARGET=development
+      - NODE_ENV=development
+    volumes:
+      # Mount source code for hot reload
+      - ./frontend:/app
+      # Create anonymous volume for node_modules to prevent overwrite
+      - /app/node_modules
+    # Run as root in development to avoid permission issues with mounted volumes
+    user: root

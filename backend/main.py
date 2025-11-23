@@ -5,10 +5,17 @@ ProDuckt FastAPI application entry point.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import logging
 
 from backend.config import settings
 from backend.database import engine, Base
+from backend.logging_config import setup_logging
 import backend.models  # Import all models to register them with SQLAlchemy
+from sqlalchemy import text
+
+# Configure logging before anything else
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -16,13 +23,20 @@ async def lifespan(app: FastAPI):
     """
     Lifespan context manager for startup and shutdown events.
     """
-    # Startup: Create tables if they don't exist (development only)
+    # Startup
+    logger.info(f"Starting ProDuckt API - Environment: {settings.environment}")
+    
+    # Create tables if they don't exist (development only)
     if settings.environment == "development":
+        logger.info("Development mode: Creating database tables if needed")
         Base.metadata.create_all(bind=engine)
+    
+    logger.info("ProDuckt API startup complete")
 
     yield
 
     # Shutdown: Clean up resources
+    logger.info("Shutting down ProDuckt API")
     pass
 
 
@@ -38,6 +52,7 @@ app = FastAPI(
 # Note: Middleware order matters - they execute in reverse order of addition
 
 # CORS middleware (executes last, so added first)
+logger.info(f"Configuring CORS for origins: {settings.get_cors_origins()}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.get_cors_origins(),
@@ -46,6 +61,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Request logging middleware (executes second to last)
+from backend.middleware.request_logging import RequestLoggingMiddleware
+app.add_middleware(RequestLoggingMiddleware)
+
 # Rate limiting middleware (executes first, so added last)
 from backend.middleware.rate_limit import RateLimitMiddleware
 app.add_middleware(RateLimitMiddleware)
@@ -53,12 +72,47 @@ app.add_middleware(RateLimitMiddleware)
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {
+    """
+    Health check endpoint for Docker and monitoring.
+    Checks database connectivity and returns service status.
+    """
+    from fastapi import HTTPException
+    from backend.database import SessionLocal
+    
+    health_status = {
         "status": "healthy",
         "environment": settings.environment,
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "components": {}
     }
+    
+    # Check database connectivity
+    try:
+        db = SessionLocal()
+        try:
+            # Execute a simple query to verify database connection
+            db.execute(text("SELECT 1"))
+            db.commit()
+            db_type = "sqlite" if settings.database_url.startswith("sqlite") else "postgresql"
+            health_status["components"]["database"] = {
+                "status": "healthy",
+                "type": db_type
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Health check failed: Database connection error - {str(e)}", exc_info=True)
+        health_status["status"] = "unhealthy"
+        health_status["components"]["database"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        raise HTTPException(
+            status_code=503,
+            detail=f"Service unhealthy: Database connection failed - {str(e)}"
+        )
+    
+    return health_status
 
 
 @app.get("/")
