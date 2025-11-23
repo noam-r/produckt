@@ -41,25 +41,29 @@ elif [ "$SECRET_KEY" = "change-me-to-a-secure-32-char-minimum-key" ]; then
     echo -e "${YELLOW}[HINT]${NC} Generate one with: openssl rand -hex 32"
 fi
 
-# Check ANTHROPIC_API_KEY
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo -e "${RED}[ERROR]${NC} ANTHROPIC_API_KEY environment variable is not set"
-    echo -e "${YELLOW}[HINT]${NC} Add ANTHROPIC_API_KEY to your .env file"
-    echo -e "${YELLOW}[HINT]${NC} Get your API key from: https://console.anthropic.com/"
-    echo ""
-    echo -e "${BLUE}[INFO]${NC} Steps to fix:"
-    echo -e "  1. Go to https://console.anthropic.com/"
-    echo -e "  2. Create an account or sign in"
-    echo -e "  3. Generate an API key"
-    echo -e "  4. Add it to your .env file: ${YELLOW}ANTHROPIC_API_KEY=sk-ant-...${NC}"
-    echo -e "  5. Restart containers: ${YELLOW}docker-compose restart${NC}"
-    echo ""
-    VALIDATION_FAILED=true
-elif [ "$ANTHROPIC_API_KEY" = "sk-ant-your-key-here" ]; then
-    echo -e "${RED}[ERROR]${NC} ANTHROPIC_API_KEY is still using the placeholder value"
-    echo -e "${YELLOW}[HINT]${NC} Update ANTHROPIC_API_KEY in your .env file with your actual API key"
-    echo -e "${YELLOW}[HINT]${NC} Get your API key from: https://console.anthropic.com/"
-    VALIDATION_FAILED=true
+# Check ANTHROPIC_API_KEY (skip in CI/test environments)
+if [ "$SKIP_API_KEY_VALIDATION" != "true" ]; then
+    if [ -z "$ANTHROPIC_API_KEY" ]; then
+        echo -e "${RED}[ERROR]${NC} ANTHROPIC_API_KEY environment variable is not set"
+        echo -e "${YELLOW}[HINT]${NC} Add ANTHROPIC_API_KEY to your .env file"
+        echo -e "${YELLOW}[HINT]${NC} Get your API key from: https://console.anthropic.com/"
+        echo ""
+        echo -e "${BLUE}[INFO]${NC} Steps to fix:"
+        echo -e "  1. Go to https://console.anthropic.com/"
+        echo -e "  2. Create an account or sign in"
+        echo -e "  3. Generate an API key"
+        echo -e "  4. Add it to your .env file: ${YELLOW}ANTHROPIC_API_KEY=sk-ant-...${NC}"
+        echo -e "  5. Restart containers: ${YELLOW}docker-compose restart${NC}"
+        echo ""
+        VALIDATION_FAILED=true
+    elif [ "$ANTHROPIC_API_KEY" = "sk-ant-your-key-here" ]; then
+        echo -e "${RED}[ERROR]${NC} ANTHROPIC_API_KEY is still using the placeholder value"
+        echo -e "${YELLOW}[HINT]${NC} Update ANTHROPIC_API_KEY in your .env file with your actual API key"
+        echo -e "${YELLOW}[HINT]${NC} Get your API key from: https://console.anthropic.com/"
+        VALIDATION_FAILED=true
+    fi
+else
+    echo -e "${YELLOW}[INFO]${NC} Skipping ANTHROPIC_API_KEY validation (SKIP_API_KEY_VALIDATION=true)"
 fi
 
 # Check DATABASE_URL

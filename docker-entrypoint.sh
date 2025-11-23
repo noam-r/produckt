@@ -45,17 +45,21 @@ elif [ ${#SECRET_KEY} -lt 32 ]; then
     echo -e "${YELLOW}[HINT]${NC} Generate one with: openssl rand -hex 32"
 fi
 
-# Check ANTHROPIC_API_KEY
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo -e "${RED}[ERROR]${NC} ANTHROPIC_API_KEY environment variable is not set"
-    echo -e "${YELLOW}[HINT]${NC} Add ANTHROPIC_API_KEY to your .env file"
-    echo -e "${YELLOW}[HINT]${NC} Get your API key from: https://console.anthropic.com/"
-    VALIDATION_FAILED=true
-elif [ "$ANTHROPIC_API_KEY" = "sk-ant-your-key-here" ]; then
-    echo -e "${RED}[ERROR]${NC} ANTHROPIC_API_KEY is still using the placeholder value"
-    echo -e "${YELLOW}[HINT]${NC} Update ANTHROPIC_API_KEY in your .env file with your actual API key"
-    echo -e "${YELLOW}[HINT]${NC} Get your API key from: https://console.anthropic.com/"
-    VALIDATION_FAILED=true
+# Check ANTHROPIC_API_KEY (skip in CI/test environments)
+if [ "$SKIP_API_KEY_VALIDATION" != "true" ]; then
+    if [ -z "$ANTHROPIC_API_KEY" ]; then
+        echo -e "${RED}[ERROR]${NC} ANTHROPIC_API_KEY environment variable is not set"
+        echo -e "${YELLOW}[HINT]${NC} Add ANTHROPIC_API_KEY to your .env file"
+        echo -e "${YELLOW}[HINT]${NC} Get your API key from: https://console.anthropic.com/"
+        VALIDATION_FAILED=true
+    elif [ "$ANTHROPIC_API_KEY" = "sk-ant-your-key-here" ]; then
+        echo -e "${RED}[ERROR]${NC} ANTHROPIC_API_KEY is still using the placeholder value"
+        echo -e "${YELLOW}[HINT]${NC} Update ANTHROPIC_API_KEY in your .env file with your actual API key"
+        echo -e "${YELLOW}[HINT]${NC} Get your API key from: https://console.anthropic.com/"
+        VALIDATION_FAILED=true
+    fi
+else
+    echo -e "${YELLOW}[INFO]${NC} Skipping ANTHROPIC_API_KEY validation (SKIP_API_KEY_VALIDATION=true)"
 fi
 
 # Check DATABASE_URL
