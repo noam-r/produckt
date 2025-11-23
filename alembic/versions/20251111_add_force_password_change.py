@@ -1,6 +1,6 @@
 """add force_password_change to users
 
-Revision ID: 20251111_add_force_password_change
+Revision ID: 20251111_force_pwd_change
 Revises: 20251106_1301
 Create Date: 2025-11-11 00:00:00
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '20251111_add_force_password_change'
+revision = '20251111_force_pwd_change'
 down_revision = '20251106_1301'
 branch_labels = None
 depends_on = None
