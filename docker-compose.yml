@@ -65,7 +65,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: ${BUILD_TARGET:-development}
+      target: ${BUILD_TARGET}
       args:
         - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
     container_name: produck-frontend

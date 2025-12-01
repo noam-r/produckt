@@ -11,12 +11,12 @@ RUN addgroup -S appuser || true && \
 
 # Copy package files
 COPY --chown=appuser:appuser package.json package-lock.json ./
+COPY --chown=appuser:appuser . .
+# Switch to non-root user
+USER appuser
 
 # Install dependencies
 RUN npm ci
-
-# Switch to non-root user
-USER appuser
 
 # Expose Vite dev server port
 EXPOSE 5173
