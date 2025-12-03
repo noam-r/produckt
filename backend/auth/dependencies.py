@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.auth.session import session_manager, Session as SessionData
 from backend.database import get_db
-from backend.models import User, UserRole
+from backend.models import User, UserRoleEnum
 
 
 def get_current_session(session_id: Optional[str] = Cookie(None)) -> SessionData:
@@ -100,7 +100,7 @@ def require_product_manager(user: User = Depends(get_current_user)) -> User:
 
     Product managers and admins have elevated permissions.
     """
-    if user.role not in [UserRole.PRODUCT_MANAGER, UserRole.ADMIN]:
+    if user.role not in [UserRoleEnum.PRODUCT_MANAGER, UserRoleEnum.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Product Manager or Admin access required"
