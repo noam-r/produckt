@@ -188,18 +188,35 @@ class AnalyticsRepository:
         Returns:
             List of dicts with time-series data
         """
-        # SQLite-compatible date truncation using strftime
-        if granularity == 'hour':
-            date_trunc = func.strftime('%Y-%m-%d %H:00:00', LLMCall.created_at)
-        elif granularity == 'day':
-            date_trunc = func.strftime('%Y-%m-%d', LLMCall.created_at)
-        elif granularity == 'week':
-            # Week truncation: get start of week (Monday)
-            date_trunc = func.date(LLMCall.created_at, 'weekday 0', '-6 days')
-        elif granularity == 'month':
-            date_trunc = func.strftime('%Y-%m-01', LLMCall.created_at)
+        # Database-agnostic date truncation
+        # Check if using PostgreSQL or SQLite
+        dialect_name = self.db.bind.dialect.name
+        
+        if dialect_name == 'postgresql':
+            # PostgreSQL uses date_trunc function
+            if granularity == 'hour':
+                date_trunc = func.date_trunc('hour', LLMCall.created_at)
+            elif granularity == 'day':
+                date_trunc = func.date_trunc('day', LLMCall.created_at)
+            elif granularity == 'week':
+                date_trunc = func.date_trunc('week', LLMCall.created_at)
+            elif granularity == 'month':
+                date_trunc = func.date_trunc('month', LLMCall.created_at)
+            else:
+                date_trunc = func.date_trunc('day', LLMCall.created_at)
         else:
-            date_trunc = func.strftime('%Y-%m-%d', LLMCall.created_at)
+            # SQLite uses strftime
+            if granularity == 'hour':
+                date_trunc = func.strftime('%Y-%m-%d %H:00:00', LLMCall.created_at)
+            elif granularity == 'day':
+                date_trunc = func.strftime('%Y-%m-%d', LLMCall.created_at)
+            elif granularity == 'week':
+                # Week truncation: get start of week (Monday)
+                date_trunc = func.date(LLMCall.created_at, 'weekday 0', '-6 days')
+            elif granularity == 'month':
+                date_trunc = func.strftime('%Y-%m-01', LLMCall.created_at)
+            else:
+                date_trunc = func.strftime('%Y-%m-%d', LLMCall.created_at)
 
         query = self.db.query(
             date_trunc.label('time_bucket'),
