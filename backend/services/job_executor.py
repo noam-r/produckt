@@ -47,7 +47,7 @@ def _execute_job(job_id: UUID) -> None:
 
     try:
         job_repo = JobRepository(db)
-        job = job_repo.get_by_id(job_id)
+        job = job_repo._get_by_id_internal(job_id)
 
         if not job:
             print(f"Job {job_id} not found")
@@ -91,7 +91,7 @@ def _execute_job(job_id: UUID) -> None:
 
         try:
             job_repo = JobRepository(db)
-            job = job_repo.get_by_id(job_id)
+            job = job_repo._get_by_id_internal(job_id)
             if job:
                 job_repo.mark_failed(job, error_message, error_details)
                 db.commit()
