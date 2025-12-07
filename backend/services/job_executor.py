@@ -18,6 +18,7 @@ from backend.repositories.mrd import MRDRepository
 from backend.agents.knowledge_gap import KnowledgeGapAgent
 from backend.agents.mrd_generator import MRDGeneratorAgent
 from backend.agents.readiness_evaluator import ReadinessEvaluatorAgent
+from backend.agents.base import LLMError
 from backend.services.quality_scorer import calculate_quality_score
 from backend.services.job_executor_scoring import (
     execute_analyze_scoring_gaps,
@@ -81,8 +82,31 @@ def _execute_job(job_id: UUID) -> None:
 
         print(f"Job {job_id} completed successfully")
 
+    except LLMError as e:
+        # LLM-specific errors with user-friendly messages
+        error_message = e.message
+        error_details = {
+            "error_type": "LLMError",
+            "user_message": e.message,
+            "technical_details": e.technical_details,
+            "traceback": traceback.format_exc()
+        }
+
+        try:
+            job_repo = JobRepository(db)
+            job = job_repo._get_by_id_internal(job_id)
+            if job:
+                job_repo.mark_failed(job, error_message, error_details)
+                db.commit()
+        except Exception as commit_error:
+            print(f"Failed to mark job as failed: {commit_error}")
+
+        print(f"Job {job_id} failed with LLM error: {error_message}")
+        if e.technical_details:
+            print(f"Technical details: {e.technical_details}")
+
     except Exception as e:
-        # Mark as failed with error details
+        # Generic errors
         error_message = str(e)
         error_details = {
             "error_type": type(e).__name__,

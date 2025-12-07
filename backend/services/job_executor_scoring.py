@@ -9,6 +9,7 @@ from backend.repositories.initiative import InitiativeRepository
 from backend.repositories.context import ContextRepository
 from backend.agents.scoring_gap_analyzer import ScoringGapAnalyzer
 from backend.agents.scoring import ScoringAgent
+from backend.agents.base import LLMError
 
 
 def execute_analyze_scoring_gaps(db: Session, job: Job) -> dict:
