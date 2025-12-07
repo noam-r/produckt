@@ -2,7 +2,7 @@
 Job executor service for running background tasks.
 """
 
-import threading
+import logging
 import traceback
 from typing import Callable, Any
 from uuid import UUID
@@ -25,16 +25,23 @@ from backend.services.job_executor_scoring import (
     execute_calculate_scores
 )
 
+logger = logging.getLogger(__name__)
+
 
 def execute_job_in_background(job_id: UUID) -> None:
     """
-    Execute a job in a background thread.
+    Queue a job for background execution.
+
+    Note: This function no longer spawns threads directly. Instead, it relies
+    on the background job worker to poll for pending jobs and execute them.
+    The job should already be created with status PENDING before calling this.
 
     Args:
         job_id: ID of the job to execute
     """
-    thread = threading.Thread(target=_execute_job, args=(job_id,), daemon=True)
-    thread.start()
+    # Job will be picked up by the background worker
+    # No action needed here - just ensure the job is in PENDING status
+    logger.info(f"Job {job_id} queued for background execution by worker")
 
 
 def _execute_job(job_id: UUID) -> None:

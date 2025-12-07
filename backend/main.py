@@ -25,19 +25,27 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info(f"Starting ProDuckt API - Environment: {settings.environment}")
-    
+
     # Create tables if they don't exist (development only)
     if settings.environment == "development":
         logger.info("Development mode: Creating database tables if needed")
         Base.metadata.create_all(bind=engine)
-    
+
+    # Start background job worker
+    logger.info("Starting background job worker...")
+    from backend.services.job_worker import start_job_worker
+    start_job_worker(poll_interval=2)
+    logger.info("Background job worker started")
+
     logger.info("ProDuckt API startup complete")
 
     yield
 
     # Shutdown: Clean up resources
     logger.info("Shutting down ProDuckt API")
-    pass
+    from backend.services.job_worker import stop_job_worker
+    stop_job_worker()
+    logger.info("Background job worker stopped")
 
 
 # Create FastAPI app
