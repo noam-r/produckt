@@ -16,6 +16,7 @@ from backend.models.evaluation import Evaluation
 from backend.models.job import Job, JobStatus, JobType
 from backend.models.llmcall import LLMCall, LLMCallStatus
 from backend.models.audit_log import AuditLog
+from backend.models.user_monthly_spending import UserMonthlySpending
 
 __all__ = [
     "User",
@@ -41,4 +42,5 @@ __all__ = [
     "LLMCall",
     "LLMCallStatus",
     "AuditLog",
+    "UserMonthlySpending",
 ]

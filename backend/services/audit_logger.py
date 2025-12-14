@@ -150,3 +150,24 @@ class AuditLogger:
             actor_id=actor_id,
             organization_id=organization_id
         )
+
+    def log_budget_change(
+        self,
+        user_id: UUID,
+        old_budget: float,
+        new_budget: float,
+        actor_id: Optional[UUID],
+        organization_id: UUID
+    ) -> AuditLog:
+        """Log budget change."""
+        return self.log(
+            action="update_budget",
+            entity_type="user",
+            entity_id=user_id,
+            changes={
+                "old_budget": old_budget,
+                "new_budget": new_budget
+            },
+            actor_id=actor_id,
+            organization_id=organization_id
+        )

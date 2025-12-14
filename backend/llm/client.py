@@ -208,6 +208,23 @@ class AnthropicClient:
             db.commit()
             db.refresh(llm_call)
 
+            # Record spending for budget tracking if user_id is provided
+            if user_id and cost_usd > 0:
+                try:
+                    from backend.services.budget_service import BudgetService
+                    from decimal import Decimal
+                    
+                    budget_service = BudgetService(db)
+                    budget_service.record_spending(
+                        user_id=user_id,
+                        amount=Decimal(str(cost_usd)),
+                        llm_call_id=llm_call.id
+                    )
+                    logger.debug(f"Recorded spending ${cost_usd:.4f} for user {user_id}")
+                except Exception as e:
+                    # Log error but don't fail the LLM call
+                    logger.error(f"Failed to record spending for user {user_id}: {e}")
+
         return response_text, llm_call, stop_reason
 
     def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:

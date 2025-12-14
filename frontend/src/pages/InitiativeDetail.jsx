@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Card,
@@ -40,10 +41,11 @@ import {
   Refresh,
 } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useInitiative, useDeleteInitiative, useGenerateQuestions } from '../hooks/useInitiatives';
 import { useQuestions } from '../hooks/useQuestions';
 import { initiativesApi } from '../api/initiatives';
+import { authApi } from '../api/auth';
 import MainLayout from '../layouts/MainLayout';
 import QuestionsTab from '../components/QuestionsTab';
 import EvaluationTab from '../components/EvaluationTab';
@@ -94,6 +96,12 @@ export default function InitiativeDetail() {
   const { data: questions } = useQuestions(id);
   const deleteInitiative = useDeleteInitiative();
   const generateQuestions = useGenerateQuestions();
+
+  // Fetch user budget status
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: authApi.getProfile,
+  });
 
   // Recalculate quality score mutation
   const recalculateQuality = useMutation({
@@ -223,14 +231,19 @@ export default function InitiativeDetail() {
 
   // Determine next action
   const getNextAction = () => {
+    const budgetExceeded = userProfile?.budget?.utilization_percentage >= 95;
+    
     if (!hasQuestions) {
       return {
         title: 'Generate Discovery Questions',
-        description: 'AI will analyze your initiative and create targeted discovery questions to gather more details.',
-        action: 'Generate Questions',
+        description: budgetExceeded 
+          ? 'Question generation is currently disabled due to budget limits. Contact your administrator.'
+          : 'AI will analyze your initiative and create targeted discovery questions to gather more details.',
+        action: budgetExceeded ? 'Budget Exceeded' : 'Generate Questions',
         icon: <AutoAwesome />,
-        handler: handleGenerateQuestions,
+        handler: budgetExceeded ? null : handleGenerateQuestions,
         isPending: generateQuestions.isPending,
+        disabled: budgetExceeded,
       };
     }
 
@@ -452,7 +465,8 @@ export default function InitiativeDetail() {
                 size="large"
                 endIcon={<ArrowForward />}
                 onClick={nextAction.handler}
-                disabled={nextAction.isPending}
+                disabled={nextAction.isPending || nextAction.disabled}
+                color={nextAction.disabled ? 'error' : 'primary'}
               >
                 {nextAction.isPending ? 'Processing...' : nextAction.action}
               </Button>

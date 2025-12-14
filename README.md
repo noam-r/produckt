@@ -38,7 +38,7 @@ python scripts/init_db.py
 ./start.sh
 ```
 
-Access at http://localhost:5173 with `admin@produckt.local` / `Admin123!`
+Access at http://localhost:5173 with `admin@acme.com` / `Admin123!`
 
 ---
 

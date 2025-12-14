@@ -40,6 +40,11 @@ class InitiativeResponse(InitiativeBase):
     created_at: datetime
     updated_at: datetime
 
+    # Question limit fields
+    max_questions: int = 50
+    max_questions_updated_at: Optional[datetime] = None
+    max_questions_updated_by: Optional[UUID] = None
+
     # Workflow completion tracking
     has_questions: bool = False
     has_evaluation: bool = False
@@ -61,3 +66,8 @@ class InitiativeListResponse(BaseModel):
 class InitiativeStatusUpdate(BaseModel):
     """Schema for updating initiative status."""
     status: InitiativeStatus = Field(..., description="New status")
+
+
+class InitiativeQuestionLimitUpdate(BaseModel):
+    """Schema for updating initiative question limit."""
+    max_questions: int = Field(..., ge=1, le=500, description="Maximum questions allowed (1-500)")

@@ -4,7 +4,7 @@ Initiative model - core entity for product ideas.
 
 import enum
 import uuid
-from sqlalchemy import Column, String, Text, Integer, Enum, ForeignKey, Index
+from sqlalchemy import Column, String, Text, Integer, Enum, ForeignKey, Index, DateTime
 from backend.models.utils import GUID
 from sqlalchemy.orm import relationship
 
@@ -60,14 +60,20 @@ class Initiative(Base, TimestampMixin):
         nullable=True
     )
 
+    # Question limit fields
+    max_questions = Column(Integer, nullable=False, default=50)
+    max_questions_updated_at = Column(DateTime, nullable=True)
+    max_questions_updated_by = Column(GUID, ForeignKey("users.id"), nullable=True)
+
     # Relationships
     organization = relationship("Organization", back_populates="initiatives")
-    created_by_user = relationship("User", back_populates="initiatives")
+    created_by_user = relationship("User", back_populates="initiatives", foreign_keys=[created_by])
     context_snapshot = relationship("Context", foreign_keys=[context_snapshot_id])
     questions = relationship("Question", back_populates="initiative", cascade="all, delete-orphan")
     mrd = relationship("MRD", back_populates="initiative", uselist=False, cascade="all, delete-orphan")
     score = relationship("Score", back_populates="initiative", uselist=False, cascade="all, delete-orphan")
     evaluation = relationship("Evaluation", back_populates="initiative", uselist=False, cascade="all, delete-orphan")
+    max_questions_updated_by_user = relationship("User", foreign_keys=[max_questions_updated_by])
 
     # Indexes
     __table_args__ = (

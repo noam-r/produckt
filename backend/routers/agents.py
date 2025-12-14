@@ -34,6 +34,10 @@ from fastapi.responses import Response
 from backend.services.job_executor import execute_job_in_background
 from backend.services.quality_scorer import calculate_quality_score
 from backend.agents.scoring_gap_analyzer import ScoringGapAnalyzer
+from backend.services.budget_service import BudgetService
+from backend.services.cost_estimator import CostEstimator
+from backend.services.question_throttle_service import QuestionThrottleService
+from backend.services.exceptions import BudgetExceededError, QuestionGenerationThrottledError, InitiativeQuestionLimitError
 
 
 router = APIRouter(prefix="/agents", tags=["AI Agents"])
@@ -92,6 +96,62 @@ def generate_questions(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No organizational context found. Please create context first."
         )
+
+    # Check question throttling limits before generating questions
+    throttle_service = QuestionThrottleService(db)
+    try:
+        throttle_service.check_question_limits_or_raise(initiative_id)
+    except QuestionGenerationThrottledError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "error": "Question generation throttled",
+                "message": str(e),
+                "unanswered_count": e.unanswered_count,
+                "unanswered_limit": QuestionThrottleService.UNANSWERED_LIMIT,
+                "suggestion": "Please answer some existing questions before generating new ones"
+            }
+        )
+    except InitiativeQuestionLimitError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "Question limit exceeded",
+                "message": str(e),
+                "current_count": e.current_count,
+                "max_questions": e.max_limit
+            }
+        )
+
+    # Check budget limits before generating questions
+    budget_service = BudgetService(db)
+    cost_estimator = CostEstimator(db)
+    
+    # Estimate cost for question generation (assume 10 questions per generation)
+    estimated_questions = 10  # Default number of questions generated
+    try:
+        estimated_cost = cost_estimator.estimate_question_generation_cost(
+            initiative_id, estimated_questions
+        )
+        
+        # Check if user can afford this operation
+        budget_service.check_budget_limit_or_raise(current_user.id, estimated_cost)
+        
+    except BudgetExceededError as e:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "error": "Budget limit exceeded",
+                "message": str(e),
+                "current_spending": f"${e.current_spending:.2f}",
+                "budget_limit": f"${e.budget_limit:.2f}",
+                "estimated_cost": f"${e.estimated_cost:.2f}",
+                "remaining_budget": f"${e.budget_limit - e.current_spending:.2f}"
+            }
+        )
+    except ValueError as e:
+        # Log the error but don't block generation if cost estimation fails
+        logger.warning(f"Cost estimation failed for initiative {initiative_id}: {e}")
 
     # Create async job
     job_repo = JobRepository(db)
@@ -157,6 +217,62 @@ def regenerate_questions(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No organizational context found. Please create context first."
         )
+
+    # Check question throttling limits before regenerating questions
+    throttle_service = QuestionThrottleService(db)
+    try:
+        throttle_service.check_question_limits_or_raise(initiative_id)
+    except QuestionGenerationThrottledError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "error": "Question generation throttled",
+                "message": str(e),
+                "unanswered_count": e.unanswered_count,
+                "unanswered_limit": QuestionThrottleService.UNANSWERED_LIMIT,
+                "suggestion": "Please answer some existing questions before regenerating new ones"
+            }
+        )
+    except InitiativeQuestionLimitError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "Question limit exceeded",
+                "message": str(e),
+                "current_count": e.current_count,
+                "max_questions": e.max_limit
+            }
+        )
+
+    # Check budget limits before regenerating questions
+    budget_service = BudgetService(db)
+    cost_estimator = CostEstimator(db)
+    
+    # Estimate cost for question regeneration (assume 10 questions per regeneration)
+    estimated_questions = 10  # Default number of questions regenerated
+    try:
+        estimated_cost = cost_estimator.estimate_question_generation_cost(
+            initiative_id, estimated_questions
+        )
+        
+        # Check if user can afford this operation
+        budget_service.check_budget_limit_or_raise(current_user.id, estimated_cost)
+        
+    except BudgetExceededError as e:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "error": "Budget limit exceeded",
+                "message": str(e),
+                "current_spending": f"${e.current_spending:.2f}",
+                "budget_limit": f"${e.budget_limit:.2f}",
+                "estimated_cost": f"${e.estimated_cost:.2f}",
+                "remaining_budget": f"${e.budget_limit - e.current_spending:.2f}"
+            }
+        )
+    except ValueError as e:
+        # Log the error but don't block regeneration if cost estimation fails
+        logger.warning(f"Cost estimation failed for initiative {initiative_id}: {e}")
 
     # Regenerate questions using agent
     try:

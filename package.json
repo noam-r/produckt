@@ -1,0 +1,31 @@
+{
+  "name": "produckt",
+  "version": "1.0.0",
+  "description": "ProDuckt - Product Requirements and MRD Generation Platform",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && npm run build",
+    "dev": "cd frontend && npm run dev",
+    "preview": "cd frontend && npm run preview",
+    "lint": "cd frontend && npm run lint",
+    "install-frontend": "cd frontend && npm install",
+    "clean": "cd frontend && rm -rf dist node_modules && cd .. && rm -rf backend/__pycache__ backend/**/__pycache__ .pytest_cache htmlcov",
+    "setup": "npm run install-frontend && cd backend && pip install -r requirements.txt"
+  },
+  "workspaces": [
+    "frontend"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/produckt.git"
+  },
+  "keywords": [
+    "product-management",
+    "mrd",
+    "requirements",
+    "ai",
+    "claude"
+  ],
+  "author": "ProDuckt Team",
+  "license": "MIT"
+}

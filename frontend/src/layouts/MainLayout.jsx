@@ -31,6 +31,7 @@ import {
   People as PeopleIcon,
   AdminPanelSettings as AdminIcon,
   BarChart as AnalyticsIcon,
+  Person as PersonIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -73,6 +74,11 @@ export default function MainLayout({ children }) {
 
   const handleMenuClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleProfile = () => {
+    handleMenuClose();
+    navigate('/profile');
   };
 
   const handleLogout = async () => {
@@ -270,6 +276,12 @@ export default function MainLayout({ children }) {
               </Typography>
             </Box>
             <Divider />
+            <MenuItem onClick={handleProfile}>
+              <ListItemIcon>
+                <PersonIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Profile</ListItemText>
+            </MenuItem>
             <MenuItem onClick={handleLogout}>
               <ListItemIcon>
                 <Logout fontSize="small" />

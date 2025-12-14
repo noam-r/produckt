@@ -13,9 +13,9 @@ from backend.models import Initiative, InitiativeStatus, User
 from backend.repositories.initiative import InitiativeRepository
 from backend.schemas.initiative import (
     InitiativeCreate, InitiativeUpdate, InitiativeResponse,
-    InitiativeListResponse, InitiativeStatusUpdate
+    InitiativeListResponse, InitiativeStatusUpdate, InitiativeQuestionLimitUpdate
 )
-from backend.auth.dependencies import get_current_user, require_product_manager
+from backend.auth.dependencies import get_current_user, require_product_manager, require_admin
 
 
 router = APIRouter(prefix="/initiatives", tags=["Initiatives"])
@@ -60,6 +60,9 @@ def enrich_initiative_with_workflow_data(initiative: Initiative, db: Session) ->
         "context_snapshot_id": initiative.context_snapshot_id,
         "created_at": initiative.created_at,
         "updated_at": initiative.updated_at,
+        "max_questions": initiative.max_questions,
+        "max_questions_updated_at": initiative.max_questions_updated_at,
+        "max_questions_updated_by": initiative.max_questions_updated_by,
         "has_questions": has_questions,
         "has_evaluation": has_evaluation,
         "has_mrd": has_mrd,
@@ -90,7 +93,8 @@ def create_initiative(
         status=InitiativeStatus.DRAFT,
         organization_id=current_user.organization_id,
         created_by=current_user.id,
-        iteration_count=0
+        iteration_count=0,
+        max_questions=50  # Set default 50 question limit for new initiatives
     )
 
     created = repo.create(initiative)
@@ -274,3 +278,38 @@ def search_initiatives(
     )
 
     return initiatives
+
+
+@router.put("/{initiative_id}/question-limit", response_model=InitiativeResponse)
+def update_initiative_question_limit(
+    initiative_id: UUID,
+    data: InitiativeQuestionLimitUpdate,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Update initiative question limit.
+
+    Requires Admin role.
+    """
+    from datetime import datetime
+    
+    repo = InitiativeRepository(db)
+
+    initiative = repo.get_by_id(initiative_id, current_user.organization_id)
+
+    if not initiative:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Initiative not found"
+        )
+
+    # Update question limit fields
+    initiative.max_questions = data.max_questions
+    initiative.max_questions_updated_at = datetime.utcnow()
+    initiative.max_questions_updated_by = current_user.id
+
+    updated = repo.update(initiative)
+    db.commit()
+
+    return updated

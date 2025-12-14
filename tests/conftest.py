@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from backend.database import Base, get_db
 from backend.main import app
-from backend.models import Organization, User, UserRole
+from backend.models import Organization, User, UserRoleEnum
 
 
 # Test database URL (in-memory for tests)
@@ -93,7 +93,7 @@ def test_user(test_db: Session, test_organization: Organization):
         email="test@example.com",
         password_hash=password_hash,
         name="Test User",
-        role=UserRole.PRODUCT_MANAGER,
+        role=UserRoleEnum.PRODUCT_MANAGER,
         organization_id=test_organization.id,
         is_active=True
     )
@@ -119,7 +119,7 @@ def admin_user(test_db: Session, test_organization: Organization):
         email="admin@example.com",
         password_hash=password_hash,
         name="Admin User",
-        role=UserRole.ADMIN,
+        role=UserRoleEnum.ADMIN,
         organization_id=test_organization.id,
         is_active=True
     )

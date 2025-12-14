@@ -5,7 +5,7 @@ User model for authentication and authorization.
 import enum
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Enum, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, String, Enum, Boolean, ForeignKey, DateTime, Numeric
 from backend.models.utils import GUID
 from sqlalchemy.orm import relationship
 
@@ -52,10 +52,17 @@ class User(Base, TimestampMixin):
     force_password_change = Column(Boolean, default=False, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
 
+    # Budget fields
+    monthly_budget_usd = Column(Numeric(10, 2), nullable=False, default=100.00)
+    budget_updated_at = Column(DateTime, nullable=True)
+    budget_updated_by = Column(GUID, ForeignKey("users.id"), nullable=True)
+
     # Relationships
     organization = relationship("Organization", back_populates="users")
-    initiatives = relationship("Initiative", back_populates="created_by_user", cascade="all, delete-orphan")
+    initiatives = relationship("Initiative", back_populates="created_by_user", foreign_keys="Initiative.created_by", cascade="all, delete-orphan")
     user_roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
+    monthly_spending = relationship("UserMonthlySpending", back_populates="user", cascade="all, delete-orphan")
+    budget_updated_by_user = relationship("User", remote_side=[id], foreign_keys=[budget_updated_by])
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role.value})>"

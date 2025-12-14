@@ -13,6 +13,7 @@ import InitiativeForm from './pages/InitiativeForm';
 import ContextManagement from './pages/ContextManagement';
 import UsersManagement from './pages/UsersManagement';
 import Analytics from './pages/Analytics';
+import UserProfile from './pages/UserProfile';
 
 function App() {
   return (
@@ -63,6 +64,16 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <InitiativeForm />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Profile route */}
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <UserProfile />
                   </ProtectedRoute>
                 }
               />

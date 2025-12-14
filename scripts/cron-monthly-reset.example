@@ -1,0 +1,18 @@
+# Example cron configuration for monthly budget reset
+# 
+# This cron job runs on the 1st day of every month at 2:00 AM
+# to schedule the monthly budget reset job.
+#
+# To install this cron job:
+# 1. Copy this file to remove the .example extension
+# 2. Edit the paths to match your installation
+# 3. Run: crontab cron-monthly-reset
+#
+# Format: minute hour day month day-of-week command
+
+# Monthly budget reset - runs at 2:00 AM on the 1st of every month
+0 2 1 * * cd /path/to/produckt && python scripts/monthly_budget_reset.py --cleanup >> /var/log/produckt/monthly-reset.log 2>&1
+
+# Alternative: Run daily and let the script decide if reset is needed
+# This is more robust as it will catch the reset even if the monthly job fails
+# 0 2 * * * cd /path/to/produckt && python scripts/monthly_budget_reset.py >> /var/log/produckt/monthly-reset.log 2>&1

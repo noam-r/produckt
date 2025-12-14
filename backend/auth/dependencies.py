@@ -60,7 +60,7 @@ def get_current_user(
     return user
 
 
-def require_role(*allowed_roles: UserRole):
+def require_role(*allowed_roles: UserRoleEnum):
     """
     Create a dependency that requires the user to have one of the specified roles.
 
@@ -86,7 +86,7 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
 
     Convenience wrapper around require_role(UserRole.ADMIN).
     """
-    if user.role != UserRole.ADMIN:
+    if user.role != UserRoleEnum.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"

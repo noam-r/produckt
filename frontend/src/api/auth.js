@@ -32,4 +32,10 @@ export const authApi = {
     const { data } = await apiClient.post('/auth/change-password', passwordData);
     return data;
   },
+
+  // Get user profile with budget info
+  getProfile: async () => {
+    const { data } = await apiClient.get('/auth/profile');
+    return data;
+  },
 };

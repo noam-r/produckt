@@ -24,6 +24,7 @@ from backend.services.job_executor_scoring import (
     execute_analyze_scoring_gaps,
     execute_calculate_scores
 )
+from backend.services.monthly_budget_reset_service import MonthlyBudgetResetService
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,8 @@ def _execute_job(job_id: UUID) -> None:
             result = execute_analyze_scoring_gaps(db, job)
         elif job.job_type == JobType.CALCULATE_SCORES:
             result = execute_calculate_scores(db, job)
+        elif job.job_type == JobType.MONTHLY_BUDGET_RESET:
+            result = _execute_monthly_budget_reset(db, job)
         else:
             raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -369,3 +372,82 @@ def _execute_evaluate_readiness(db: Session, job: Job) -> dict:
         "risk_level": evaluation_data["risk_level"],
         "initiative_id": str(job.initiative_id)
     }
+
+def _execute_monthly_budget_reset(db: Session, job: Job) -> dict:
+    """
+    Execute monthly budget reset job.
+
+    Args:
+        db: Database session
+        job: Job instance
+
+    Returns:
+        Result data with reset statistics
+    """
+    from datetime import datetime
+    
+    # Update progress
+    job_repo = JobRepository(db)
+    job_repo.update_status(job, JobStatus.IN_PROGRESS, "Starting monthly budget reset...", 10)
+    db.commit()
+
+    # Get current date for reset
+    now = datetime.utcnow()
+    target_year = now.year
+    target_month = now.month
+
+    # Initialize reset service
+    reset_service = MonthlyBudgetResetService(db)
+
+    # Update progress
+    job_repo.update_status(job, JobStatus.IN_PROGRESS, "Checking if reset is needed...", 20)
+    db.commit()
+
+    # Check if reset should run
+    should_run = reset_service.should_run_reset(target_year, target_month)
+    
+    if not should_run:
+        # Reset already processed for this month
+        result = {
+            "already_processed": True,
+            "target_year": target_year,
+            "target_month": target_month,
+            "message": f"Budget reset already processed for {target_year}-{target_month:02d}"
+        }
+        logger.info(f"Monthly budget reset skipped - already processed for {target_year}-{target_month:02d}")
+        return result
+
+    # Update progress
+    job_repo.update_status(job, JobStatus.IN_PROGRESS, "Getting previous month summary...", 30)
+    db.commit()
+
+    # Get previous month summary for reporting
+    prev_month_summary = reset_service.get_previous_month_spending_summary(target_year, target_month)
+
+    # Update progress
+    job_repo.update_status(job, JobStatus.IN_PROGRESS, "Resetting monthly spending counters...", 50)
+    db.commit()
+
+    # Perform the reset
+    reset_stats = reset_service.reset_monthly_budgets(target_year, target_month)
+
+    # Update progress
+    job_repo.update_status(job, JobStatus.IN_PROGRESS, "Cleaning up old records...", 80)
+    db.commit()
+
+    # Clean up old records (keep 24 months of history)
+    cleanup_count = reset_service.cleanup_old_spending_records(months_to_keep=24)
+
+    # Final result
+    result = {
+        "reset_completed": True,
+        "target_year": target_year,
+        "target_month": target_month,
+        "reset_statistics": reset_stats,
+        "previous_month_summary": prev_month_summary,
+        "cleanup_count": cleanup_count,
+        "message": f"Successfully reset budgets for {target_year}-{target_month:02d}"
+    }
+
+    logger.info(f"Monthly budget reset completed successfully: {result}")
+    return result

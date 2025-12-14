@@ -40,6 +40,11 @@ const adminApi = {
     await apiClient.delete(`/api/admin/users/${userId}`);
   },
 
+  updateUserBudget: async (userId, budgetData) => {
+    const { data } = await apiClient.put(`/api/admin/users/${userId}/budget`, budgetData);
+    return data;
+  },
+
   // Analytics endpoints
   getAnalyticsOverview: async (days = 30) => {
     const { data } = await apiClient.get('/api/admin/analytics/overview', {

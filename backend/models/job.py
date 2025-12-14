@@ -27,6 +27,7 @@ class JobType(str, enum.Enum):
     EVALUATE_READINESS = "evaluate_readiness"
     ANALYZE_SCORING_GAPS = "analyze_scoring_gaps"
     CALCULATE_SCORES = "calculate_scores"
+    MONTHLY_BUDGET_RESET = "monthly_budget_reset"
 
 
 class Job(Base):

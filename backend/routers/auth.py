@@ -12,10 +12,13 @@ from backend.models.user_role import UserRole as UserRoleAssociation
 from backend.schemas.auth import (
     RegisterRequest, LoginRequest, SessionResponse, MessageResponse, ChangePasswordRequest
 )
+from backend.schemas.admin import UserResponse, BudgetInfo, UserRoleInfo
 from backend.auth.password import hash_password, verify_password
 from backend.auth.password_validator import validate_password_or_raise, PasswordValidationError
 from backend.auth.session import session_manager
 from backend.config import settings
+from backend.services.budget_service import BudgetService
+from backend.auth.dependencies import get_current_user
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -334,3 +337,57 @@ def change_password(
     db.commit()
 
     return MessageResponse(message="Password changed successfully")
+
+
+@router.get("/profile", response_model=UserResponse)
+def get_user_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get current user's profile including budget information.
+    
+    Returns detailed user information with budget status.
+    """
+    # Get user roles
+    roles = [
+        UserRoleInfo(
+            id=ur.role.id,
+            name=ur.role.name,
+            description=ur.role.description
+        )
+        for ur in current_user.user_roles
+    ]
+
+    # Get budget information with warnings
+    budget_service = BudgetService(db)
+    try:
+        budget_status_with_warnings = budget_service.get_budget_status_with_warnings(current_user.id)
+        budget_info = BudgetInfo(
+            monthly_budget_usd=budget_status_with_warnings["budget_limit"],
+            current_spending_usd=budget_status_with_warnings["current_spending"],
+            remaining_budget_usd=budget_status_with_warnings["remaining_budget"],
+            utilization_percentage=budget_status_with_warnings["utilization_percentage"],
+            budget_updated_at=current_user.budget_updated_at,
+            budget_updated_by=current_user.budget_updated_by,
+            has_warning=budget_status_with_warnings["has_warning"],
+            warning_message=budget_status_with_warnings["warning_message"],
+            is_over_budget=budget_status_with_warnings["is_over_budget"],
+            is_near_limit=budget_status_with_warnings["is_near_limit"]
+        )
+    except Exception:
+        # If budget service fails, return None for budget info
+        budget_info = None
+
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        name=current_user.name,
+        is_active=current_user.is_active,
+        force_password_change=current_user.force_password_change,
+        roles=roles,
+        budget=budget_info,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at,
+        last_login_at=current_user.last_login_at
+    )

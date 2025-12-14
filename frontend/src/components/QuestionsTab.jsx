@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Card,
@@ -23,6 +24,8 @@ import {
   DialogActions,
   Tabs,
   Tab,
+  Paper,
+  Divider,
 } from '@mui/material';
 import {
   ExpandMore,
@@ -33,9 +36,12 @@ import {
   AutoAwesome,
   Refresh,
   Assessment,
+  Warning,
+  AccountBalance,
 } from '@mui/icons-material';
 import { useQuestions } from '../hooks/useQuestions';
 import { useGenerateQuestions } from '../hooks/useInitiatives';
+import { authApi } from '../api/auth';
 import AnswerDialog from './AnswerDialog';
 
 // Category options
@@ -91,6 +97,12 @@ export default function QuestionsTab({ initiativeId, onNavigateToEvaluation }) {
 
   const { data: questions, isLoading, error } = useQuestions(initiativeId);
   const generateQuestions = useGenerateQuestions();
+
+  // Fetch user budget status
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: authApi.getProfile,
+  });
 
   // Separate answered and unanswered questions
   const unansweredQuestions = questions?.filter((q) => !q.answer) || [];
@@ -162,6 +174,68 @@ export default function QuestionsTab({ initiativeId, onNavigateToEvaluation }) {
     }
   };
 
+  // Helper function to safely convert budget values to numbers
+  const safeNumber = (value) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') return parseFloat(value) || 0;
+    return 0;
+  };
+
+  // Budget warning component
+  const BudgetWarning = () => {
+    const budget = userProfile?.budget;
+    if (!budget) return null;
+
+    const utilizationPercentage = safeNumber(budget.utilization_percentage);
+    const estimatedCost = 2.50; // Rough estimate for question generation
+
+    if (utilizationPercentage >= 90) {
+      return (
+        <Alert severity="error" icon={<Warning />} sx={{ mb: 2 }}>
+          <Typography variant="body2" fontWeight="600" gutterBottom>
+            Budget Limit Exceeded
+          </Typography>
+          <Typography variant="body2">
+            You have used {utilizationPercentage.toFixed(1)}% of your monthly budget 
+            (${safeNumber(budget.current_spending_usd).toFixed(2)} / ${safeNumber(budget.monthly_budget_usd).toFixed(2)}).
+            Question generation may be blocked. Contact your administrator to increase your budget.
+          </Typography>
+        </Alert>
+      );
+    }
+
+    if (utilizationPercentage >= 80) {
+      return (
+        <Alert severity="warning" icon={<Warning />} sx={{ mb: 2 }}>
+          <Typography variant="body2" fontWeight="600" gutterBottom>
+            Budget Warning
+          </Typography>
+          <Typography variant="body2">
+            You have used {utilizationPercentage.toFixed(1)}% of your monthly budget. 
+            Estimated cost for question generation: ~${estimatedCost.toFixed(2)}. 
+            Remaining budget: ${safeNumber(budget.remaining_budget_usd).toFixed(2)}.
+          </Typography>
+        </Alert>
+      );
+    }
+
+    return (
+      <Paper sx={{ p: 2, mb: 2, bgcolor: 'primary.50', border: 1, borderColor: 'primary.200' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <AccountBalance color="primary" fontSize="small" />
+          <Typography variant="body2" fontWeight="600" color="primary.main">
+            Budget Status
+          </Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary">
+          Monthly budget: ${safeNumber(budget.monthly_budget_usd).toFixed(2)} | 
+          Used: ${safeNumber(budget.current_spending_usd).toFixed(2)} ({utilizationPercentage.toFixed(1)}%) | 
+          Estimated cost: ~${estimatedCost.toFixed(2)}
+        </Typography>
+      </Paper>
+    );
+  };
+
   const handleRegenerateQuestions = async () => {
     try {
       await generateQuestions.mutateAsync({
@@ -192,28 +266,39 @@ export default function QuestionsTab({ initiativeId, onNavigateToEvaluation }) {
 
   if (!questions || questions.length === 0) {
     return (
-      <Box sx={{ textAlign: 'center', py: 6 }}>
-        <AutoAwesome sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-        <Typography variant="h6" gutterBottom>
-          No Questions Yet
-        </Typography>
-        <Typography variant="body2" color="text.secondary" paragraph>
-          Generate AI-powered discovery questions to understand this initiative better
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AutoAwesome />}
-          onClick={handleGenerateQuestions}
-          disabled={generateQuestions.isPending}
-        >
-          {generateQuestions.isPending ? 'Generating...' : 'Generate Questions'}
-        </Button>
+      <Box>
+        <BudgetWarning />
+        <Box sx={{ textAlign: 'center', py: 6 }}>
+          <AutoAwesome sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+          <Typography variant="h6" gutterBottom>
+            No Questions Yet
+          </Typography>
+          <Typography variant="body2" color="text.secondary" paragraph>
+            Generate AI-powered discovery questions to understand this initiative better
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<AutoAwesome />}
+            onClick={handleGenerateQuestions}
+            disabled={generateQuestions.isPending || (userProfile?.budget?.utilization_percentage >= 95)}
+          >
+            {generateQuestions.isPending ? 'Generating...' : 'Generate Questions'}
+          </Button>
+          {userProfile?.budget?.utilization_percentage >= 95 && (
+            <Typography variant="caption" color="error" display="block" sx={{ mt: 1 }}>
+              Question generation disabled due to budget limit
+            </Typography>
+          )}
+        </Box>
       </Box>
     );
   }
 
   return (
     <Box>
+      {/* Budget Warning */}
+      <BudgetWarning />
+
       {/* Progress Section */}
       <Card elevation={2} sx={{ mb: 3 }}>
         <CardContent>
@@ -235,7 +320,7 @@ export default function QuestionsTab({ initiativeId, onNavigateToEvaluation }) {
               <Button
                 startIcon={<Refresh />}
                 onClick={() => setRegenerateDialogOpen(true)}
-                disabled={generateQuestions.isPending}
+                disabled={generateQuestions.isPending || (userProfile?.budget?.utilization_percentage >= 95)}
               >
                 Regenerate
               </Button>
@@ -465,23 +550,45 @@ export default function QuestionsTab({ initiativeId, onNavigateToEvaluation }) {
       />
 
       {/* Regenerate Dialog */}
-      <Dialog open={regenerateDialogOpen} onClose={() => setRegenerateDialogOpen(false)}>
+      <Dialog open={regenerateDialogOpen} onClose={() => setRegenerateDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Regenerate Questions</DialogTitle>
         <DialogContent>
           <Typography variant="body2" paragraph>
             This will generate a new set of discovery questions based on the current initiative
             details and any previous answers.
           </Typography>
+          
+          {/* Budget Information */}
+          {userProfile?.budget && (
+            <Paper sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
+              <Typography variant="body2" fontWeight="600" gutterBottom>
+                Budget Impact
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Estimated cost: ~$2.50 | 
+                Current usage: {safeNumber(userProfile.budget.utilization_percentage).toFixed(1)}% | 
+                Remaining: ${safeNumber(userProfile.budget.remaining_budget_usd).toFixed(2)}
+              </Typography>
+            </Paper>
+          )}
+
           <Alert severity="warning" sx={{ mb: 2 }}>
             Note: This may take a few moments to complete.
           </Alert>
+
+          {/* Budget Warning */}
+          {userProfile?.budget?.utilization_percentage >= 90 && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              Warning: You are near or over your budget limit. Question generation may fail.
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRegenerateDialogOpen(false)}>Cancel</Button>
           <Button
             variant="contained"
             onClick={handleRegenerateQuestions}
-            disabled={generateQuestions.isPending}
+            disabled={generateQuestions.isPending || (userProfile?.budget?.utilization_percentage >= 95)}
           >
             {generateQuestions.isPending ? 'Regenerating...' : 'Regenerate'}
           </Button>
