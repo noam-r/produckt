@@ -18,6 +18,7 @@ from backend.repositories.user_role_repository import UserRoleRepository
 from backend.repositories.analytics import AnalyticsRepository
 from backend.services.audit_logger import AuditLogger
 from backend.services.budget_service import BudgetService
+from backend.auth.session import session_manager
 from backend.schemas.admin import (
     UserResponse,
     UserListResponse,
@@ -257,13 +258,20 @@ def update_user(
     if request.name and request.name != user.name:
         changes["name"] = {"old": user.name, "new": request.name}
 
+    # Track if we need to invalidate sessions after DB update
+    should_invalidate_sessions = False
+    
     if request.is_active is not None and request.is_active != user.is_active:
         changes["is_active"] = {"old": user.is_active, "new": request.is_active}
+        
+        # Mark for session invalidation AFTER database update
+        if request.is_active is False:
+            should_invalidate_sessions = True
 
     if request.force_password_change is not None and request.force_password_change != user.force_password_change:
         changes["force_password_change"] = {"old": user.force_password_change, "new": request.force_password_change}
 
-    # Update user
+    # Update user in database FIRST
     updated_user = user_repo.update(
         user_id=user_id,
         organization_id=current_user.organization_id,
@@ -272,6 +280,11 @@ def update_user(
         is_active=request.is_active,
         force_password_change=request.force_password_change
     )
+    
+    # AFTER database is updated, invalidate sessions
+    if should_invalidate_sessions:
+        deleted_sessions = session_manager.delete_user_sessions(user_id)
+        changes["sessions_invalidated"] = deleted_sessions
 
     # Update roles if provided
     if request.role_ids is not None:
@@ -837,4 +850,41 @@ def get_budget_alerts(
         "critical_alerts": len([a for a in alerts if a["alert_level"] == "critical"]),
         "warning_alerts": len([a for a in alerts if a["alert_level"] == "warning"]),
         "alerts": alerts
+    }
+
+# Debug endpoints for session management
+@router.get("/debug/sessions")
+def get_active_sessions(
+    current_user: User = Depends(require_admin)
+):
+    """Get information about active sessions (for debugging)."""
+    return {
+        "active_session_count": session_manager.get_active_session_count(),
+        "message": "Use this to monitor active sessions"
+    }
+
+
+@router.post("/debug/sessions/cleanup")
+def cleanup_sessions(
+    current_user: User = Depends(require_admin)
+):
+    """Force cleanup of expired sessions (for debugging)."""
+    cleaned_up = session_manager.cleanup_expired_sessions()
+    return {
+        "cleaned_up_sessions": cleaned_up,
+        "remaining_active_sessions": session_manager.get_active_session_count()
+    }
+
+
+@router.delete("/debug/users/{user_id}/sessions")
+def force_delete_user_sessions(
+    user_id: UUID,
+    current_user: User = Depends(require_admin)
+):
+    """Force delete all sessions for a specific user (for debugging)."""
+    deleted_sessions = session_manager.delete_user_sessions(user_id)
+    return {
+        "deleted_sessions": deleted_sessions,
+        "user_id": str(user_id),
+        "message": f"Deleted {deleted_sessions} sessions for user {user_id}"
     }

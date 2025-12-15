@@ -46,12 +46,16 @@ def get_current_user(
     user = db.query(User).filter(User.id == session.user_id).first()
 
     if not user:
+        # User was deleted - invalidate session and raise 401
+        session_manager.delete_session(session.session_id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
         )
 
     if not user.is_active:
+        # User was disabled - invalidate session and raise 403
+        session_manager.delete_session(session.session_id)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is disabled"
