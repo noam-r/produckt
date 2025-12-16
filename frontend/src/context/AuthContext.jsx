@@ -3,7 +3,8 @@ import { authApi } from '../api/auth';
 
 const AuthContext = createContext(null);
 
-const SESSION_CACHE_KEY = 'produck_session_cache';
+// Only cache minimal UI state - NO sensitive user data
+const UI_STATE_CACHE_KEY = 'produck_ui_state';
 
 // Helper to transform session data to user object
 const transformSessionToUser = (sessionData) => ({
@@ -17,28 +18,51 @@ const transformSessionToUser = (sessionData) => ({
   force_password_change: sessionData.force_password_change || false,
 });
 
+// Helper to extract only safe UI state for caching
+const extractSafeUIState = (user) => ({
+  // Only cache non-sensitive UI preferences
+  hasActiveSession: true,
+  lastLoginTime: Date.now()
+});
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false); // Changed to false - non-blocking by default
   const [error, setError] = useState(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
-  // Check for existing session on mount - optimistic with cache
+  // Check for existing session on mount - always verify with server
   useEffect(() => {
-    // Try to load from cache first (instant, optimistic)
+    // SECURITY: Clean up any existing sensitive data from localStorage
     try {
-      const cached = localStorage.getItem(SESSION_CACHE_KEY);
-      if (cached) {
-        const cachedUser = JSON.parse(cached);
-        setUser(cachedUser); // Optimistically set user from cache
+      const oldSessionData = localStorage.getItem('produck_session_cache');
+      if (oldSessionData) {
+        console.warn('Removing sensitive session data from localStorage for security');
+        localStorage.removeItem('produck_session_cache');
       }
     } catch (e) {
-      // Ignore cache errors, will verify with server
-      console.warn('Failed to load cached session:', e);
+      // Ignore cleanup errors
     }
 
-    // Then verify with server in background (non-blocking)
-    checkSession();
+    // Check if we might have a session (non-sensitive indicator only)
+    let shouldCheckSession = true;
+    try {
+      const uiState = localStorage.getItem(UI_STATE_CACHE_KEY);
+      if (uiState) {
+        const parsed = JSON.parse(uiState);
+        // Only use this as a hint to check session faster, never trust it
+        shouldCheckSession = parsed.hasActiveSession;
+      }
+    } catch (e) {
+      // Ignore cache errors
+    }
+
+    // Always verify with server - never trust localStorage for auth
+    if (shouldCheckSession) {
+      checkSession();
+    } else {
+      setInitialCheckDone(true);
+    }
   }, []);
 
   const checkSession = async () => {
@@ -49,19 +73,20 @@ export function AuthProvider({ children }) {
       setUser(user);
       setError(null);
 
-      // Cache the session for fast subsequent loads
+      // Cache only safe UI state - NO user data
       try {
-        localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(user));
+        const safeState = extractSafeUIState(user);
+        localStorage.setItem(UI_STATE_CACHE_KEY, JSON.stringify(safeState));
       } catch (e) {
-        console.warn('Failed to cache session:', e);
+        console.warn('Failed to cache UI state:', e);
       }
     } catch (err) {
       // No active session or session expired
       setUser(null);
 
-      // Clear cache
+      // Clear UI state cache
       try {
-        localStorage.removeItem(SESSION_CACHE_KEY);
+        localStorage.removeItem(UI_STATE_CACHE_KEY);
       } catch (e) {
         // Ignore
       }
@@ -80,11 +105,12 @@ export function AuthProvider({ children }) {
       console.log('Setting user:', user);
       setUser(user);
 
-      // Cache the session
+      // Cache only safe UI state - NO user data
       try {
-        localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(user));
+        const safeState = extractSafeUIState(user);
+        localStorage.setItem(UI_STATE_CACHE_KEY, JSON.stringify(safeState));
       } catch (e) {
-        console.warn('Failed to cache session:', e);
+        console.warn('Failed to cache UI state:', e);
       }
 
       console.log('User state should be updated');
@@ -109,11 +135,12 @@ export function AuthProvider({ children }) {
       const user = transformSessionToUser(response);
       setUser(user);
 
-      // Cache the session
+      // Cache only safe UI state - NO user data
       try {
-        localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(user));
+        const safeState = extractSafeUIState(user);
+        localStorage.setItem(UI_STATE_CACHE_KEY, JSON.stringify(safeState));
       } catch (e) {
-        console.warn('Failed to cache session:', e);
+        console.warn('Failed to cache UI state:', e);
       }
 
       return { success: true };
@@ -133,9 +160,9 @@ export function AuthProvider({ children }) {
       setUser(null);
       setError(null);
 
-      // Clear cache
+      // Clear UI state cache
       try {
-        localStorage.removeItem(SESSION_CACHE_KEY);
+        localStorage.removeItem(UI_STATE_CACHE_KEY);
       } catch (e) {
         // Ignore
       }
