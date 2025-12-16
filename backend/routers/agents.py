@@ -100,7 +100,9 @@ def generate_questions(
     # Check question throttling limits before generating questions
     throttle_service = QuestionThrottleService(db)
     try:
-        throttle_service.check_question_limits_or_raise(initiative_id)
+        # Check with estimated question count (15 for first generation, 8 for subsequent)
+        estimated_questions = 15 if initiative.iteration_count == 0 else 8
+        throttle_service.check_question_limits_or_raise(initiative_id, estimated_questions)
     except QuestionGenerationThrottledError as e:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -221,7 +223,9 @@ def regenerate_questions(
     # Check question throttling limits before regenerating questions
     throttle_service = QuestionThrottleService(db)
     try:
-        throttle_service.check_question_limits_or_raise(initiative_id)
+        # Check with estimated question count for regeneration (max 8 questions)
+        estimated_questions = 8
+        throttle_service.check_question_limits_or_raise(initiative_id, estimated_questions)
     except QuestionGenerationThrottledError as e:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

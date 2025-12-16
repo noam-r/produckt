@@ -174,6 +174,15 @@ class KnowledgeGapAgent(BaseAgent):
         if duplicates_filtered > 0:
             print(f"Filtered {duplicates_filtered} duplicate question(s) for initiative {initiative.id}")
 
+        # Enforce question count limits based on iteration
+        max_questions_for_iteration = 15 if next_iteration == 1 else 8
+        
+        if len(questions) > max_questions_for_iteration:
+            print(f"Warning: LLM generated {len(questions)} questions, truncating to {max_questions_for_iteration} for iteration {next_iteration}")
+            # Keep highest priority questions first
+            questions.sort(key=lambda q: (q.priority.value, q.question_text))
+            questions = questions[:max_questions_for_iteration]
+
         return questions
 
     def regenerate_questions(

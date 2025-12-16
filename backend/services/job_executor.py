@@ -18,6 +18,7 @@ from backend.repositories.mrd import MRDRepository
 from backend.agents.knowledge_gap import KnowledgeGapAgent
 from backend.agents.mrd_generator import MRDGeneratorAgent
 from backend.agents.readiness_evaluator import ReadinessEvaluatorAgent
+from backend.services.question_throttle_service import QuestionThrottleService
 from backend.agents.base import LLMError
 from backend.services.quality_scorer import calculate_quality_score
 from backend.services.job_executor_scoring import (
@@ -174,6 +175,19 @@ def _execute_generate_questions(db: Session, job: Job) -> dict:
     # Generate questions
     agent = KnowledgeGapAgent(db)
     questions = agent.generate_questions(initiative, context, job.created_by)
+
+    # Validate question count doesn't exceed limits
+    throttle_service = QuestionThrottleService(db)
+    result = throttle_service.check_question_limits(initiative.id, len(questions))
+    
+    if not result.can_add:
+        # Truncate questions to fit within limits
+        max_allowed = result.max_questions - result.total_count
+        if max_allowed > 0:
+            print(f"Warning: Generated {len(questions)} questions, truncating to {max_allowed} to fit within limits")
+            questions = questions[:max_allowed]
+        else:
+            raise ValueError(f"Cannot add questions: initiative at maximum limit ({result.total_count}/{result.max_questions})")
 
     # Update progress
     job_repo.update_status(job, JobStatus.IN_PROGRESS, "Saving questions...", 80)
