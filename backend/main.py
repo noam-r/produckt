@@ -175,13 +175,18 @@ async def debug_job_worker():
     finally:
         db.close()
     
+    worker_health = worker.get_health_status() if worker else None
+    
     return {
         "worker_exists": worker is not None,
-        "worker_running": worker.running if worker else False,
-        "worker_thread_alive": worker.thread.is_alive() if worker and worker.thread else False,
-        "worker_poll_interval": worker.poll_interval if worker else None,
+        "worker_health": worker_health,
         "job_statistics": {str(status): count for status, count in job_stats},
-        "pending_jobs_count": pending_jobs
+        "pending_jobs_count": pending_jobs,
+        "recommendations": {
+            "worker_ok": worker is not None and worker.running,
+            "jobs_processing": pending_jobs == 0,
+            "action_needed": "Restart backend service" if not worker else None
+        }
     }
 
 

@@ -40,9 +40,11 @@ import {
   AccountBalance,
 } from '@mui/icons-material';
 import { useQuestions } from '../hooks/useQuestions';
-import { useGenerateQuestions } from '../hooks/useInitiatives';
 import { authApi } from '../api/auth';
+import { useJobPolling } from '../hooks/useJobPolling';
+import apiClient from '../api/client';
 import AnswerDialog from './AnswerDialog';
+import JobProgressModal from './JobProgressModal';
 
 // Category options
 const categoryOptions = [
@@ -94,9 +96,25 @@ export default function QuestionsTab({ initiativeId, onNavigateToEvaluation }) {
   const [regenerateDialogOpen, setRegenerateDialogOpen] = useState(false);
   const [keepUnanswered, setKeepUnanswered] = useState(true);
   const [expandedAccordions, setExpandedAccordions] = useState({});
+  
+  // Job polling state
+  const [generateJobId, setGenerateJobId] = useState(null);
+  const [isRegeneratingSync, setIsRegeneratingSync] = useState(false);
+  const [apiError, setApiError] = useState(null);
 
-  const { data: questions, isLoading, error } = useQuestions(initiativeId);
-  const generateQuestions = useGenerateQuestions();
+  const { data: questions, isLoading, error, refetch: refetchQuestions } = useQuestions(initiativeId);
+
+  // Question generation job polling (async)
+  const generateJobPolling = useJobPolling(generateJobId, {
+    onComplete: (resultData) => {
+      setGenerateJobId(null);
+      refetchQuestions(); // Refresh questions after generation
+    },
+    onError: (error) => {
+      setGenerateJobId(null);
+      setApiError(error.message || 'Question generation failed');
+    }
+  });
 
   // Fetch user budget status
   const { data: userProfile } = useQuery({
@@ -167,10 +185,15 @@ export default function QuestionsTab({ initiativeId, onNavigateToEvaluation }) {
   };
 
   const handleGenerateQuestions = async () => {
+    setApiError(null);
     try {
-      await generateQuestions.mutateAsync(initiativeId);
+      const response = await apiClient.post(
+        `/api/agents/initiatives/${initiativeId}/generate-questions`
+      );
+      // Response contains job_id
+      setGenerateJobId(response.data.job_id);
     } catch (err) {
-      // Error handling is done in the hook
+      setApiError(err.response?.data?.detail || err.message || 'Failed to start question generation');
     }
   };
 
@@ -237,16 +260,26 @@ export default function QuestionsTab({ initiativeId, onNavigateToEvaluation }) {
   };
 
   const handleRegenerateQuestions = async () => {
+    setApiError(null);
+    setIsRegeneratingSync(true);
     try {
-      await generateQuestions.mutateAsync({
-        id: initiativeId,
-        keepUnanswered,
-      });
+      await apiClient.post(
+        `/api/agents/initiatives/${initiativeId}/regenerate-questions`,
+        null,
+        { params: { keep_unanswered: keepUnanswered } }
+      );
+      // Regeneration is synchronous, so we can immediately refresh and close dialog
       setRegenerateDialogOpen(false);
+      refetchQuestions();
     } catch (err) {
-      // Error handling is done in the hook
+      setApiError(err.response?.data?.detail || err.message || 'Failed to regenerate questions');
+    } finally {
+      setIsRegeneratingSync(false);
     }
   };
+
+  const isGenerating = generateJobPolling.isPolling;
+  const isRegenerating = isRegeneratingSync;
 
   if (isLoading) {
     return (
@@ -261,6 +294,17 @@ export default function QuestionsTab({ initiativeId, onNavigateToEvaluation }) {
       <Alert severity="error">
         Failed to load questions: {error.message}
       </Alert>
+    );
+  }
+
+  // Show API errors
+  if (apiError) {
+    return (
+      <Box>
+        <Alert severity="error" onClose={() => setApiError(null)} sx={{ mb: 2 }}>
+          {apiError}
+        </Alert>
+      </Box>
     );
   }
 
@@ -280,9 +324,9 @@ export default function QuestionsTab({ initiativeId, onNavigateToEvaluation }) {
             variant="contained"
             startIcon={<AutoAwesome />}
             onClick={handleGenerateQuestions}
-            disabled={generateQuestions.isPending || (userProfile?.budget?.utilization_percentage >= 95)}
+            disabled={isGenerating || (userProfile?.budget?.utilization_percentage >= 95)}
           >
-            {generateQuestions.isPending ? 'Generating...' : 'Generate Questions'}
+            {isGenerating ? 'Generating...' : 'Generate Questions'}
           </Button>
           {userProfile?.budget?.utilization_percentage >= 95 && (
             <Typography variant="caption" color="error" display="block" sx={{ mt: 1 }}>
@@ -320,7 +364,7 @@ export default function QuestionsTab({ initiativeId, onNavigateToEvaluation }) {
               <Button
                 startIcon={<Refresh />}
                 onClick={() => setRegenerateDialogOpen(true)}
-                disabled={generateQuestions.isPending || (userProfile?.budget?.utilization_percentage >= 95)}
+                disabled={isGenerating || isRegenerating || (userProfile?.budget?.utilization_percentage >= 95)}
               >
                 Regenerate
               </Button>
@@ -584,16 +628,31 @@ export default function QuestionsTab({ initiativeId, onNavigateToEvaluation }) {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRegenerateDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setRegenerateDialogOpen(false)} disabled={isRegenerating}>Cancel</Button>
           <Button
             variant="contained"
             onClick={handleRegenerateQuestions}
-            disabled={generateQuestions.isPending || (userProfile?.budget?.utilization_percentage >= 95)}
+            disabled={isRegenerating || (userProfile?.budget?.utilization_percentage >= 95)}
           >
-            {generateQuestions.isPending ? 'Regenerating...' : 'Regenerate'}
+            {isRegenerating ? 'Regenerating...' : 'Regenerate'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Job Progress Modals */}
+      <JobProgressModal
+        open={isGenerating}
+        title="Generating Questions"
+        progressMessage={generateJobPolling.progressMessage}
+        progressPercent={generateJobPolling.progress}
+      />
+
+      <JobProgressModal
+        open={isRegenerating}
+        title="Regenerating Questions"
+        progressMessage="Processing your request..."
+        progressPercent={null}
+      />
     </Box>
   );
 }

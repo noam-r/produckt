@@ -33,21 +33,33 @@ logger = logging.getLogger(__name__)
 class JobWorker:
     """
     Background worker that continuously polls for pending jobs and executes them.
+    
+    Features:
+    - Auto-restart on thread death
+    - Health monitoring and recovery
+    - Graceful shutdown handling
+    - Crash detection and logging
     """
 
-    def __init__(self, poll_interval: int = 2, max_retries: int = 3):
+    def __init__(self, poll_interval: int = 2, max_retries: int = 3, auto_restart: bool = True):
         """
         Initialize job worker.
 
         Args:
             poll_interval: Seconds between polling for new jobs
             max_retries: Maximum retry attempts for failed jobs
+            auto_restart: Whether to automatically restart worker if it crashes
         """
         self.poll_interval = poll_interval
         self.max_retries = max_retries
+        self.auto_restart = auto_restart
         self.running = False
         self.thread: Optional[threading.Thread] = None
         self._shutdown_event = threading.Event()
+        self._restart_count = 0
+        self._max_restarts = 5
+        self._last_heartbeat = datetime.utcnow()
+        self._health_check_thread: Optional[threading.Thread] = None
 
         # Register signal handlers for graceful shutdown (with error handling)
         try:
@@ -78,6 +90,12 @@ class JobWorker:
             self.thread = threading.Thread(target=self._run_worker, daemon=False)
             self.thread.start()
             logger.info(f"✅ Job worker thread started successfully (ID: {self.thread.ident})")
+            
+            # Start health monitoring if auto-restart is enabled
+            if self.auto_restart:
+                self._health_check_thread = threading.Thread(target=self._health_monitor, daemon=True)
+                self._health_check_thread.start()
+                logger.info("✅ Health monitor started")
             
             # Give the thread a moment to start
             time.sleep(0.1)
@@ -116,6 +134,9 @@ class JobWorker:
                 loop_count += 1
                 logger.debug(f"Job worker loop iteration {loop_count}")
                 
+                # Update heartbeat for health monitoring
+                self._last_heartbeat = datetime.utcnow()
+                
                 # Check for pending jobs
                 jobs = self._get_pending_jobs()
 
@@ -126,6 +147,8 @@ class JobWorker:
                             break
                         logger.info(f"🔄 Executing job {job.id} (type: {job.job_type.value})")
                         self._execute_job_safely(job.id)
+                        # Update heartbeat after job execution
+                        self._last_heartbeat = datetime.utcnow()
                 else:
                     logger.debug("No pending jobs found")
 
@@ -142,6 +165,75 @@ class JobWorker:
                 time.sleep(self.poll_interval)
 
         logger.info("🛑 Job worker loop ended")
+
+    def _health_monitor(self):
+        """Monitor worker health and restart if needed."""
+        logger.info("🏥 Health monitor started")
+        
+        while self.running:
+            try:
+                time.sleep(30)  # Check every 30 seconds
+                
+                if not self.running:
+                    break
+                
+                # Check if main worker thread is alive
+                if not self.thread or not self.thread.is_alive():
+                    logger.error("💀 Job worker thread has died!")
+                    self._attempt_restart("Worker thread died")
+                    continue
+                
+                # Check for heartbeat timeout (no activity for 5 minutes)
+                heartbeat_age = datetime.utcnow() - self._last_heartbeat
+                if heartbeat_age > timedelta(minutes=5):
+                    logger.warning(f"💓 Worker heartbeat is stale ({heartbeat_age})")
+                    # Don't restart for stale heartbeat, just log it
+                    # The worker might just be idle
+                
+            except Exception as e:
+                logger.error(f"❌ Error in health monitor: {e}", exc_info=True)
+                time.sleep(30)
+        
+        logger.info("🏥 Health monitor stopped")
+
+    def _attempt_restart(self, reason: str):
+        """Attempt to restart the worker after a crash."""
+        if self._restart_count >= self._max_restarts:
+            logger.error(f"💥 Worker has crashed {self._restart_count} times, giving up!")
+            self.running = False
+            return
+        
+        self._restart_count += 1
+        logger.warning(f"🔄 Attempting worker restart #{self._restart_count} (reason: {reason})")
+        
+        try:
+            # Stop the old thread if it exists
+            if self.thread:
+                self.thread = None
+            
+            # Start a new worker thread
+            self.thread = threading.Thread(target=self._run_worker, daemon=False)
+            self.thread.start()
+            self._last_heartbeat = datetime.utcnow()
+            
+            logger.info(f"✅ Worker restarted successfully (attempt #{self._restart_count})")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to restart worker: {e}", exc_info=True)
+
+    def get_health_status(self) -> dict:
+        """Get current health status of the worker."""
+        heartbeat_age = datetime.utcnow() - self._last_heartbeat
+        
+        return {
+            "running": self.running,
+            "thread_alive": self.thread.is_alive() if self.thread else False,
+            "restart_count": self._restart_count,
+            "last_heartbeat": self._last_heartbeat.isoformat(),
+            "heartbeat_age_seconds": heartbeat_age.total_seconds(),
+            "auto_restart_enabled": self.auto_restart,
+            "max_restarts": self._max_restarts
+        }
 
     def _get_pending_jobs(self) -> list[Job]:
         """
