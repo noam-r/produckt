@@ -152,6 +152,39 @@ async def debug_config():
     }
 
 
+@app.get("/debug/job-worker")
+async def debug_job_worker():
+    """Debug job worker status."""
+    from backend.services.job_worker import get_job_worker
+    from backend.database import SessionLocal
+    from backend.models import Job, JobStatus
+    from sqlalchemy import func
+    
+    worker = get_job_worker()
+    
+    # Get job statistics
+    db = SessionLocal()
+    try:
+        job_stats = db.query(
+            Job.status, 
+            func.count(Job.id).label('count')
+        ).group_by(Job.status).all()
+        
+        pending_jobs = db.query(Job).filter(Job.status == JobStatus.PENDING).count()
+        
+    finally:
+        db.close()
+    
+    return {
+        "worker_exists": worker is not None,
+        "worker_running": worker.running if worker else False,
+        "worker_thread_alive": worker.thread.is_alive() if worker and worker.thread else False,
+        "worker_poll_interval": worker.poll_interval if worker else None,
+        "job_statistics": {str(status): count for status, count in job_stats},
+        "pending_jobs_count": pending_jobs
+    }
+
+
 # Import and include routers
 from backend.routers import auth, initiatives, questions, context, agents, jobs, admin
 

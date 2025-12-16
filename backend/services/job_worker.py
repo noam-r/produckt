@@ -49,9 +49,15 @@ class JobWorker:
         self.thread: Optional[threading.Thread] = None
         self._shutdown_event = threading.Event()
 
-        # Register signal handlers for graceful shutdown
-        signal.signal(signal.SIGTERM, self._signal_handler)
-        signal.signal(signal.SIGINT, self._signal_handler)
+        # Register signal handlers for graceful shutdown (with error handling)
+        try:
+            signal.signal(signal.SIGTERM, self._signal_handler)
+            signal.signal(signal.SIGINT, self._signal_handler)
+            logger.info("Signal handlers registered successfully")
+        except (OSError, ValueError) as e:
+            # Signal handlers might not work in some environments (like Docker)
+            logger.warning(f"Could not register signal handlers: {e}")
+            logger.info("Job worker will still function, but graceful shutdown may not work")
 
     def _signal_handler(self, signum, frame):
         """Handle shutdown signals gracefully."""
@@ -64,11 +70,25 @@ class JobWorker:
             logger.warning("Job worker is already running")
             return
 
+        logger.info(f"Starting job worker with poll_interval={self.poll_interval}s")
         self.running = True
         self._shutdown_event.clear()
-        self.thread = threading.Thread(target=self._run_worker, daemon=False)
-        self.thread.start()
-        logger.info(f"Job worker started (poll_interval={self.poll_interval}s)")
+        
+        try:
+            self.thread = threading.Thread(target=self._run_worker, daemon=False)
+            self.thread.start()
+            logger.info(f"✅ Job worker thread started successfully (ID: {self.thread.ident})")
+            
+            # Give the thread a moment to start
+            time.sleep(0.1)
+            if self.thread.is_alive():
+                logger.info("✅ Job worker thread is alive and running")
+            else:
+                logger.error("❌ Job worker thread failed to start or died immediately")
+                
+        except Exception as e:
+            logger.error(f"❌ Failed to start job worker thread: {e}", exc_info=True)
+            self.running = False
 
     def stop(self):
         """Stop the background worker thread gracefully."""
@@ -88,31 +108,40 @@ class JobWorker:
 
     def _run_worker(self):
         """Main worker loop that polls for pending jobs."""
-        logger.info("Job worker loop started")
+        logger.info("🚀 Job worker loop started")
+        loop_count = 0
 
         while self.running:
             try:
+                loop_count += 1
+                logger.debug(f"Job worker loop iteration {loop_count}")
+                
                 # Check for pending jobs
                 jobs = self._get_pending_jobs()
 
                 if jobs:
-                    logger.info(f"Found {len(jobs)} pending job(s)")
+                    logger.info(f"📋 Found {len(jobs)} pending job(s)")
                     for job in jobs:
                         if not self.running:
                             break
+                        logger.info(f"🔄 Executing job {job.id} (type: {job.job_type.value})")
                         self._execute_job_safely(job.id)
+                else:
+                    logger.debug("No pending jobs found")
 
                 # Wait for next poll interval or shutdown event
+                logger.debug(f"Waiting {self.poll_interval}s for next poll...")
                 if self._shutdown_event.wait(timeout=self.poll_interval):
                     # Shutdown event was set
+                    logger.info("Shutdown event received, exiting worker loop")
                     break
 
             except Exception as e:
-                logger.error(f"Error in job worker loop: {e}", exc_info=True)
+                logger.error(f"❌ Error in job worker loop: {e}", exc_info=True)
                 # Continue running even if there's an error
                 time.sleep(self.poll_interval)
 
-        logger.info("Job worker loop ended")
+        logger.info("🛑 Job worker loop ended")
 
     def _get_pending_jobs(self) -> list[Job]:
         """
